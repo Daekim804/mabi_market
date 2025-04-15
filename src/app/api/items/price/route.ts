@@ -2,12 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { calculateWeightedAverage } from '@/utils/price';
 
-// 안전한 공개 접근을 위해 anon 키 사용
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 interface AuctionData {
   auction_price_per_unit: number;
   item_count: number;
@@ -16,9 +10,21 @@ interface AuctionData {
 
 export async function GET(request: Request) {
   try {
-    // 기본 환경 변수 설정 확인
-    console.log('SUPABASE_URL 설정됨:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log('ANON_KEY 설정됨:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+    // 환경 변수 확인
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    console.log('SUPABASE_URL 설정됨:', !!supabaseUrl);
+    console.log('ANON_KEY 설정됨:', !!supabaseAnonKey);
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json({ 
+        error: '서버 구성 오류: Supabase 접속 정보가 설정되지 않았습니다.' 
+      }, { status: 500 });
+    }
+    
+    // 런타임에 Supabase 클라이언트 초기화
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
     
     const { searchParams } = new URL(request.url);
     const itemName = searchParams.get('itemName');
