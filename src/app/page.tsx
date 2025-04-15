@@ -1,6 +1,40 @@
+'use client';
+
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
+
+interface PriceInfo {
+  avgPrice: number;
+  lowestPrice: number;
+  totalItems: number;
+  collectedAt: string;
+  priceList: Array<{
+    price: number;
+    count: number;
+  }>;
+}
 
 export default function Home() {
+  const [priceInfo, setPriceInfo] = useState<PriceInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchPrice = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/items/price?itemName=돌연변이 토끼의 발');
+      const data = await response.json();
+      setPriceInfo(data);
+    } catch (err) {
+      console.error('가격 정보를 가져오는 중 오류가 발생했습니다:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPrice();
+  }, []);
+
   return (
     <div className="space-y-12">
       <section className="text-center relative py-20 px-4 sm:px-6 lg:px-8">
@@ -48,19 +82,4 @@ export default function Home() {
       </section>
     </div>
   );
-}
-
-async function fetchRabbitFootPrice() {
-  try {
-    const response = await fetch('/api/items/price?name=돌연변이 토끼의 발');
-    const data = await response.json();
-    if (data.avgPrice) {
-      setRabbitFootPrice(Math.round(data.avgPrice));
-      setLastUpdated(new Date().toLocaleString());
-    }
-  } catch (error) {
-    setError('가격 정보를 불러오는데 실패했습니다');
-  } finally {
-    setIsLoading(false);
-  }
 }

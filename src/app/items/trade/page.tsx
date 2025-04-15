@@ -3,25 +3,23 @@
 import { useState, useEffect } from 'react';
 import { formatKSTDateTime } from '@/utils/price';
 
-interface ItemPriceInfo {
+interface PriceData {
   avgPrice: number;
   lowestPrice: number;
   totalItems: number;
-  priceList: Array<{price: number, count: number}>;
   collectedAt: string;
+  priceList: Array<{
+    price: number;
+    count: number;
+  }>;
 }
 
 interface ItemPrices {
-  [key: string]: ItemPriceInfo | null;
+  [key: string]: PriceData;
 }
 
 export default function TradePage() {
-  const [itemPrices, setItemPrices] = useState<ItemPrices>({
-    '돌연변이 토끼의 발': null,
-    '돌연변이 식물의 점액질': null,
-    '사스콰치의 심장': null,
-    '뮤턴트': null
-  });
+  const [itemPrices, setItemPrices] = useState<Record<string, PriceData | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPriceList, setShowPriceList] = useState<{[key: string]: boolean}>({});
@@ -38,58 +36,42 @@ export default function TradePage() {
     hasAllPrices: false
   });
 
-  async function fetchItemPrice(itemName: string) {
-    try {
-      const response = await fetch(`/api/items/price?name=${encodeURIComponent(itemName)}`);
-      const data = await response.json();
-
-      if (data.error) {
-        console.warn(`${itemName} 가격 정보 없음:`, data.message || data.error);
-        setItemPrices(prev => ({
-          ...prev,
-          [itemName]: null
-        }));
-        return;
-      }
-
-      if (data.avgPrice) {
-        setItemPrices(prev => ({
-          ...prev,
-          [itemName]: {
-            avgPrice: data.avgPrice,
-            lowestPrice: data.lowestPrice,
-            totalItems: data.totalItems,
-            priceList: data.priceList,
-            collectedAt: data.collectedAt
-          }
-        }));
-      }
-    } catch (error: any) {
-      console.error(`${itemName} 가격 정보를 불러오는 중 오류 발생:`, error);
-    }
-  }
-
-  async function fetchAllPrices() {
+  const fetchAllPrices = async () => {
     setIsLoading(true);
-    setError(null);
-
     try {
-      await Promise.all(Object.keys(itemPrices).map(fetchItemPrice));
-    } catch (error: any) {
-      setError('가격 정보를 불러오는데 실패했습니다');
+      const items = ['돌연변이 토끼의 발', '돌연변이 식물의 점액질', '사스콰치의 심장', '뮤턴트'];
+      const prices: ItemPrices = {};
+      
+      for (const item of items) {
+        console.log(`${item} 가격 정보 요청...`);
+        const response = await fetch(`/api/items/price?itemName=${encodeURIComponent(item)}`);
+        console.log(`${item} 응답 상태:`, response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`${item} 데이터:`, data);
+          prices[item] = data;
+        } else {
+          const errorData = await response.json();
+          console.error(`${item} 오류:`, errorData);
+        }
+      }
+      
+      console.log('모든 가격 정보:', prices);
+      setItemPrices(prices);
+    } catch (err) {
+      console.error('가격 정보를 가져오는 중 오류가 발생했습니다:', err);
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   // 뮤턴트 제작에 필요한 총 비용과 손익을 계산
   useEffect(() => {
-    const { 
-      '돌연변이 토끼의 발': rabbitFoot, 
-      '돌연변이 식물의 점액질': plantMucus, 
-      '사스콰치의 심장': sasquatchHeart,
-      '뮤턴트': mutant
-    } = itemPrices;
+    const rabbitFoot = itemPrices?.['돌연변이 토끼의 발'] || null;
+    const plantMucus = itemPrices?.['돌연변이 식물의 점액질'] || null;
+    const sasquatchHeart = itemPrices?.['사스콰치의 심장'] || null;
+    const mutant = itemPrices?.['뮤턴트'] || null;
 
     // 모든 재료와 결과물의 가격 정보가 있는지 확인
     const hasAllPrices = 
@@ -100,9 +82,9 @@ export default function TradePage() {
     if (hasAllPrices) {
       // 제작 비용 계산 (재료 10개, 5개, 3개)
       const materialCost = 
-        (rabbitFoot!.avgPrice * 10) + 
-        (plantMucus!.avgPrice * 5) + 
-        (sasquatchHeart!.avgPrice * 3);
+        (rabbitFoot.avgPrice * 10) + 
+        (plantMucus.avgPrice * 5) + 
+        (sasquatchHeart.avgPrice * 3);
 
       // 뮤턴트 가격 정보가 있다면 손익 계산
       if (mutant !== null) {
@@ -138,9 +120,6 @@ export default function TradePage() {
 
   useEffect(() => {
     fetchAllPrices();
-    // 5분마다 가격 정보 갱신
-    const interval = setInterval(fetchAllPrices, 5 * 60 * 1000);
-    return () => clearInterval(interval);
   }, []);
 
   const togglePriceList = (itemName: string) => {
@@ -151,7 +130,7 @@ export default function TradePage() {
   };
 
   // 아이템 가격 정보 표시 컴포넌트
-  const ItemPriceDisplay = ({ itemName, priceInfo }: { itemName: string, priceInfo: ItemPriceInfo | null }) => {
+  const ItemPriceDisplay = ({ itemName, priceInfo }: { itemName: string, priceInfo: PriceData | null }) => {
     if (!priceInfo) {
       return (
         <div className="text-amber-700">가격 정보 없음</div>
@@ -160,9 +139,9 @@ export default function TradePage() {
 
     return (
       <div>
-        <div className="text-amber-700">평균: {priceInfo.avgPrice.toLocaleString()} Gold/개</div>
-        <div className="text-xs text-amber-600">최저: {priceInfo.lowestPrice.toLocaleString()} Gold/개</div>
-        <div className="text-xs text-amber-600">총 {(priceInfo.avgPrice * 10).toLocaleString()} Gold</div>
+        <div className="text-amber-700">평균: {Math.round(priceInfo.avgPrice).toLocaleString()} Gold/개</div>
+        <div className="text-xs text-amber-600">최저: {Math.round(priceInfo.lowestPrice).toLocaleString()} Gold/개</div>
+        <div className="text-xs text-amber-600">총 {Math.round(priceInfo.avgPrice * 10).toLocaleString()} Gold</div>
         <button
           onClick={() => togglePriceList(itemName)}
           className="mt-2 text-xs text-amber-600 hover:text-amber-700 flex items-center justify-end w-full"
@@ -179,7 +158,7 @@ export default function TradePage() {
             {priceInfo.priceList.map((item, index) => (
               <div key={index} className="flex justify-between">
                 <span>{item.count.toLocaleString()}개</span>
-                <span>{item.price.toLocaleString()} Gold</span>
+                <span>{Math.round(item.price).toLocaleString()} Gold</span>
               </div>
             ))}
           </div>
@@ -195,7 +174,8 @@ export default function TradePage() {
 
   // 뮤턴트 판매/제작 손익 정보 표시 컴포넌트
   const MutantProfitDisplay = () => {
-    const mutantPrice = itemPrices['뮤턴트']?.lowestPrice || 0;
+    const mutant = itemPrices?.['뮤턴트'];
+    const mutantPrice = mutant?.lowestPrice || 0;
 
     if (!profitInfo.hasAllPrices) {
       return (
@@ -211,18 +191,18 @@ export default function TradePage() {
         <div className="space-y-1 text-sm">
           <div className="flex justify-between">
             <span className="text-amber-700">총 재료 비용:</span>
-            <span className="font-medium">{profitInfo.totalCost.toLocaleString()} Gold</span>
+            <span className="font-medium">{Math.round(profitInfo.totalCost).toLocaleString()} Gold</span>
           </div>
           {mutantPrice > 0 && (
             <>
               <div className="flex justify-between">
                 <span className="text-amber-700">뮤턴트 최저 판매가:</span>
-                <span className="font-medium">{mutantPrice.toLocaleString()} Gold</span>
+                <span className="font-medium">{Math.round(mutantPrice).toLocaleString()} Gold</span>
               </div>
               <div className="flex justify-between border-t border-amber-200 pt-1 mt-1">
                 <span className="text-amber-700">예상 {profitInfo.profit >= 0 ? '이익' : '손해'}:</span>
                 <span className={`font-medium ${profitInfo.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {profitInfo.profit.toLocaleString()} Gold
+                  {Math.round(profitInfo.profit).toLocaleString()} Gold
                   <span className="ml-1 text-xs">
                     ({profitInfo.profit >= 0 ? '+' : ''}{profitInfo.profitPercentage.toFixed(1)}%)
                   </span>
@@ -273,80 +253,84 @@ export default function TradePage() {
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-amber-800 font-medium">뮤턴트</span>
                   <div className="flex items-center">
-                    <span className="text-sm bg-amber-100 px-2 py-1 rounded text-amber-700 mr-2">거래 가능</span>
-                    {!isLoading && itemPrices['뮤턴트'] && (
-                      <span className="text-sm bg-amber-600 px-2 py-1 rounded text-white">
-                        평균: {itemPrices['뮤턴트'].avgPrice.toLocaleString()} Gold
-                      </span>
+                    {isLoading ? (
+                      <span className="text-xs text-amber-500">로딩 중...</span>
+                    ) : (
+                      <ItemPriceDisplay 
+                        itemName="뮤턴트" 
+                        priceInfo={itemPrices?.['뮤턴트'] || null}
+                      />
                     )}
                   </div>
                 </div>
-                <div className="ml-4">
-                  {/* 뮤턴트 시세 정보 */}
-                  {isLoading ? (
-                    <div className="flex items-center space-x-2 mb-3">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-500 border-t-transparent"></div>
-                      <span className="text-amber-700">시세 갱신 중...</span>
-                    </div>
-                  ) : (
-                    <div className="mb-3">
+
+                <div className="bg-amber-50/50 rounded p-2 mt-2">
+                  <div className="font-medium text-amber-800 mb-1">제작 재료:</div>
+                  <ul className="space-y-2">
+                    <li className="flex justify-between items-start">
+                      <span className="text-amber-700">돌연변이 토끼의 발 × 10</span>
+                    </li>
+                    <li className="flex justify-between items-start">
+                      <span className="text-amber-700">돌연변이 식물의 점액질 × 5</span>
+                    </li>
+                    <li className="flex justify-between items-start">
+                      <span className="text-amber-700">사스콰치의 심장 × 3</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* 제작 손익 표시 */}
+                {!isLoading && <MutantProfitDisplay />}
+              </li>
+
+              {/* 돌연변이 토끼의 발 */}
+              <li className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-800 font-medium">돌연변이 토끼의 발</span>
+                  <div className="flex items-center">
+                    {isLoading ? (
+                      <span className="text-xs text-amber-500">로딩 중...</span>
+                    ) : (
                       <ItemPriceDisplay 
-                        itemName="뮤턴트" 
-                        priceInfo={itemPrices['뮤턴트']} 
+                        itemName="돌연변이 토끼의 발" 
+                        priceInfo={itemPrices?.['돌연변이 토끼의 발'] || null}
                       />
-                    </div>
-                  )}
-                  
-                  <div className="bg-amber-50/50 rounded p-2 mt-2">
-                    <div className="font-medium text-amber-800 mb-1">제작 재료:</div>
-                    <ul className="space-y-2">
-                      <li className="flex justify-between items-start">
-                        <span className="text-amber-700">돌연변이 토끼의 발 × 10</span>
-                        {isLoading ? (
-                          <div className="flex items-center space-x-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-500 border-t-transparent"></div>
-                            <span className="text-amber-700">갱신 중...</span>
-                          </div>
-                        ) : (
-                          <ItemPriceDisplay 
-                            itemName="돌연변이 토끼의 발" 
-                            priceInfo={itemPrices['돌연변이 토끼의 발']} 
-                          />
-                        )}
-                      </li>
-                      <li className="flex justify-between items-start">
-                        <span className="text-amber-700">돌연변이 식물의 점액질 × 5</span>
-                        {isLoading ? (
-                          <div className="flex items-center space-x-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-500 border-t-transparent"></div>
-                            <span className="text-amber-700">갱신 중...</span>
-                          </div>
-                        ) : (
-                          <ItemPriceDisplay 
-                            itemName="돌연변이 식물의 점액질" 
-                            priceInfo={itemPrices['돌연변이 식물의 점액질']} 
-                          />
-                        )}
-                      </li>
-                      <li className="flex justify-between items-start">
-                        <span className="text-amber-700">사스콰치의 심장 × 3</span>
-                        {isLoading ? (
-                          <div className="flex items-center space-x-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-500 border-t-transparent"></div>
-                            <span className="text-amber-700">갱신 중...</span>
-                          </div>
-                        ) : (
-                          <ItemPriceDisplay 
-                            itemName="사스콰치의 심장" 
-                            priceInfo={itemPrices['사스콰치의 심장']} 
-                          />
-                        )}
-                      </li>
-                    </ul>
+                    )}
                   </div>
-                  
-                  {/* 제작 손익 표시 */}
-                  {!isLoading && <MutantProfitDisplay />}
+                </div>
+              </li>
+
+              {/* 돌연변이 식물의 점액질 */}
+              <li className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-800 font-medium">돌연변이 식물의 점액질</span>
+                  <div className="flex items-center">
+                    {isLoading ? (
+                      <span className="text-xs text-amber-500">로딩 중...</span>
+                    ) : (
+                      <ItemPriceDisplay 
+                        itemName="돌연변이 식물의 점액질" 
+                        priceInfo={itemPrices?.['돌연변이 식물의 점액질'] || null}
+                      />
+                    )}
+                  </div>
+                </div>
+              </li>
+
+              {/* 사스콰치의 심장 */}
+              <li className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-800 font-medium">사스콰치의 심장</span>
+                  <div className="flex items-center">
+                    {isLoading ? (
+                      <span className="text-xs text-amber-500">로딩 중...</span>
+                    ) : (
+                      <ItemPriceDisplay 
+                        itemName="사스콰치의 심장" 
+                        priceInfo={itemPrices?.['사스콰치의 심장'] || null}
+                      />
+                    )}
+                  </div>
                 </div>
               </li>
             </ul>
