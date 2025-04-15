@@ -84,10 +84,11 @@ export async function GET(request: Request) {
       collectedAt: latestCollectedAt,
       priceList: roundedPriceList
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('API 에러:', error);
+    const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
     return NextResponse.json(
-      { error: `서버 오류가 발생했습니다: ${error.message}` },
+      { error: `서버 오류가 발생했습니다: ${errorMessage}` },
       { status: 500 }
     );
   }

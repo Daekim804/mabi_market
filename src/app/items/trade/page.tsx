@@ -21,7 +21,6 @@ interface ItemPrices {
 export default function TradePage() {
   const [itemPrices, setItemPrices] = useState<Record<string, PriceData | null>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showPriceList, setShowPriceList] = useState<{[key: string]: boolean}>({});
   // 제작 손익 계산용 상태 추가
   const [profitInfo, setProfitInfo] = useState<{
@@ -229,18 +228,6 @@ export default function TradePage() {
         물물교역
       </h1>
       
-      {error && (
-        <div className="bg-red-100 text-red-800 p-4 rounded mb-4">
-          <p>{error}</p>
-          <button 
-            onClick={fetchAllPrices}
-            className="text-sm text-red-600 underline mt-2"
-          >
-            다시 시도
-          </button>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 gap-6">
         {/* 페라 섹션 */}
         <section className="bg-amber-50 rounded-xl p-6 border border-amber-200">
