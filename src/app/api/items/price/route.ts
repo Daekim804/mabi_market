@@ -2,10 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { calculateWeightedAverage } from '@/utils/price';
 
-// 서비스 역할 키를 사용하여 더 높은 권한으로 Supabase에 접근
+// 안전한 공개 접근을 위해 anon 키 사용
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 interface AuctionData {
@@ -16,10 +16,9 @@ interface AuctionData {
 
 export async function GET(request: Request) {
   try {
-    // 환경 변수 로깅 (민감 정보는 일부만 표시)
+    // 기본 환경 변수 설정 확인
     console.log('SUPABASE_URL 설정됨:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log('SERVICE_ROLE_KEY 설정됨:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-    console.log('SERVICE_ROLE_KEY 일부:', process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 10) + '...');
+    console.log('ANON_KEY 설정됨:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
     
     const { searchParams } = new URL(request.url);
     const itemName = searchParams.get('itemName');
@@ -99,4 +98,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-} 
+}
