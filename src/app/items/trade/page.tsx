@@ -43,20 +43,27 @@ export default function TradePage() {
       
       for (const item of items) {
         console.log(`${item} 가격 정보 요청...`);
-        const response = await fetch(`/api/items/price?itemName=${encodeURIComponent(item)}`);
-        console.log(`${item} 응답 상태:`, response.status);
+        const apiUrl = `/api/items/price?itemName=${encodeURIComponent(item)}`;
+        console.log('API URL:', apiUrl);
         
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`${item} 데이터:`, data);
-          prices[item] = data;
-        } else {
-          const errorData = await response.json();
-          console.error(`${item} 오류:`, errorData);
+        try {
+          const response = await fetch(apiUrl);
+          console.log(`${item} 응답 상태:`, response.status);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log(`${item} 데이터 수신 성공:`, data);
+            prices[item] = data;
+          } else {
+            const errorText = await response.text();
+            console.error(`${item} 응답 오류:`, response.status, errorText);
+          }
+        } catch (fetchError) {
+          console.error(`${item} 요청 실패:`, fetchError);
         }
       }
       
-      console.log('모든 가격 정보:', prices);
+      console.log('모든 가격 정보 결과:', Object.keys(prices).length);
       setItemPrices(prices);
     } catch (err) {
       console.error('가격 정보를 가져오는 중 오류가 발생했습니다:', err);

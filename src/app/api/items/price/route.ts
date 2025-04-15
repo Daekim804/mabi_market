@@ -16,6 +16,11 @@ interface AuctionData {
 
 export async function GET(request: Request) {
   try {
+    // 환경 변수 로깅 (민감 정보는 일부만 표시)
+    console.log('SUPABASE_URL 설정됨:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('SERVICE_ROLE_KEY 설정됨:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+    console.log('SERVICE_ROLE_KEY 일부:', process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 10) + '...');
+    
     const { searchParams } = new URL(request.url);
     const itemName = searchParams.get('itemName');
 
@@ -25,6 +30,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '아이템 이름이 필요합니다' }, { status: 400 });
     }
 
+    console.log('Supabase 쿼리 시작:', itemName);
     // auction_list에서 해당 아이템의 최저가 10개 항목 조회
     const { data, error } = await supabase
       .from('auction_list')
@@ -33,10 +39,10 @@ export async function GET(request: Request) {
       .order('auction_price_per_unit', { ascending: true })
       .limit(10);
 
-    console.log('쿼리 결과:', { data, error });
+    console.log('쿼리 결과:', { data: !!data ? `${data.length}개 항목` : 'null', error });
 
     if (error) {
-      console.error('Supabase error:', error);
+      console.error('Supabase error 상세:', JSON.stringify(error));
       return NextResponse.json({ error: '데이터를 가져오는 중 오류가 발생했습니다.' }, { status: 500 });
     }
 
