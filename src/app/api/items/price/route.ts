@@ -2,9 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { calculateWeightedAverage } from '@/utils/price';
 
+// 서비스 역할 키를 사용하여 더 높은 권한으로 Supabase에 접근
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 interface AuctionData {
