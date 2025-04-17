@@ -1,8 +1,14 @@
-'use client';
-
-import { useState, useEffect } from 'react';
+// page.tsx - Server Component
+import { Suspense } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { formatKSTDateTime } from '@/utils/price';
+import ItemPriceList from './components/ItemPriceList';
+import MutantProfitCalculator from './components/MutantProfitCalculator';
 
+// 5분마다 페이지 재검증 설정
+export const revalidate = 300; // 5분(300초)
+
+// 서버 컴포넌트에서 사용할 타입 정의
 interface PriceData {
   avgPrice: number;
   lowestPrice: number;
@@ -15,233 +21,164 @@ interface PriceData {
 }
 
 interface ItemPrices {
-  [key: string]: PriceData;
+  [key: string]: PriceData | null;
 }
 
-export default function TradePage() {
-  const [itemPrices, setItemPrices] = useState<Record<string, PriceData | null>>({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [showPriceList, setShowPriceList] = useState<{[key: string]: boolean}>({});
-  // 제작 손익 계산용 상태 추가
-  const [profitInfo, setProfitInfo] = useState<{
-    totalCost: number;
-    profit: number;
-    profitPercentage: number;
-    hasAllPrices: boolean;
-  }>({
-    totalCost: 0,
-    profit: 0,
-    profitPercentage: 0,
-    hasAllPrices: false
-  });
+// 서버 컴포넌트에서 데이터 가져오기
+async function fetchItemPrices() {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const fetchAllPrices = async () => {
-    setIsLoading(true);
-    try {
-      const items = ['돌연변이 토끼의 발', '돌연변이 식물의 점액질', '사스콰치의 심장', '뮤턴트'];
-      const prices: ItemPrices = {};
-      
-      for (const item of items) {
-        console.log(`${item} 가격 정보 요청...`);
-        const apiUrl = `/api/items/price?itemName=${encodeURIComponent(item)}`;
-        console.log('API URL:', apiUrl);
-        
-        try {
-          // 캐시를 비활성화하는 fetch 옵션 추가
-          const response = await fetch(apiUrl, {
-            cache: 'no-store',
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            }
-          });
-          
-          console.log(`${item} 응답 상태:`, response.status);
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log(`${item} 데이터 수신 성공:`, data);
-            prices[item] = data;
-          } else {
-            const errorText = await response.text();
-            console.error(`${item} 응답 오류:`, response.status, errorText);
-          }
-        } catch (fetchError) {
-          console.error(`${item} 요청 실패:`, fetchError);
-        }
-      }
-      
-      console.log('모든 가격 정보 결과:', Object.keys(prices).length);
-      setItemPrices(prices);
-    } catch (err) {
-      console.error('가격 정보를 가져오는 중 오류가 발생했습니다:', err);
-    } finally {
-      setIsLoading(false);
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('환경 변수 오류: Supabase 접속 정보가 없습니다');
+      return {};
     }
-  };
 
-  // 뮤턴트 제작에 필요한 총 비용과 손익을 계산
-  useEffect(() => {
-    const rabbitFoot = itemPrices?.['돌연변이 토끼의 발'] || null;
-    const plantMucus = itemPrices?.['돌연변이 식물의 점액질'] || null;
-    const sasquatchHeart = itemPrices?.['사스콰치의 심장'] || null;
-    const mutant = itemPrices?.['뮤턴트'] || null;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false },
+      global: { fetch: fetch }
+    });
 
-    // 모든 재료와 결과물의 가격 정보가 있는지 확인
-    const hasAllPrices = 
-      rabbitFoot !== null && 
-      plantMucus !== null && 
-      sasquatchHeart !== null;
+    const items = ['돌연변이 토끼의 발', '돌연변이 식물의 점액질', '사스콰치의 심장', '뮤턴트'];
+    const prices: ItemPrices = {};
 
-    if (hasAllPrices) {
-      // 제작 비용 계산 (재료 10개, 5개, 3개)
-      const materialCost = 
-        (rabbitFoot.avgPrice * 10) + 
-        (plantMucus.avgPrice * 5) + 
-        (sasquatchHeart.avgPrice * 3);
+    for (const item of items) {
+      try {
+        const { data, error } = await supabase
+          .from('auction_list')
+          .select('auction_price_per_unit, item_count, collected_at')
+          .eq('item_name', item)
+          .order('auction_price_per_unit', { ascending: true })
+          .limit(10);
 
-      // 뮤턴트 가격 정보가 있다면 손익 계산
-      if (mutant !== null) {
-        const mutantPrice = mutant.lowestPrice;
-        const profit = mutantPrice - materialCost;
-        const profitPercentage = (profit / materialCost) * 100;
+        if (error) {
+          console.error(`${item} 데이터 오류:`, error);
+          continue;
+        }
 
-        setProfitInfo({
-          totalCost: materialCost,
-          profit: profit,
-          profitPercentage: profitPercentage,
-          hasAllPrices: true
-        });
-      } else {
-        // 뮤턴트 가격 정보가 없지만 재료 가격은 있는 경우
-        setProfitInfo({
-          totalCost: materialCost,
-          profit: 0,
-          profitPercentage: 0,
-          hasAllPrices: false
-        });
+        if (!data || data.length === 0) {
+          prices[item] = null;
+          continue;
+        }
+
+        // AuctionData를 PriceItem 형식으로 변환
+        const priceItems = data.map(item => ({
+          price: item.auction_price_per_unit,
+          count: item.item_count
+        }));
+
+        // 가중 평균 가격 계산
+        const totalItems = priceItems.reduce((sum, item) => sum + item.count, 0);
+        const totalValue = priceItems.reduce((sum, item) => sum + (item.price * item.count), 0);
+        const weightedAvg = totalValue / totalItems;
+
+        // 정수로 반올림된 가격 값 사용
+        const roundedAvgPrice = Math.round(weightedAvg);
+        const roundedLowestPrice = Math.round(data[0].auction_price_per_unit);
+
+        // 가장 최근 수집 시간 찾기
+        const latestCollectedAt = data.reduce((latest, current) => {
+          const currentDate = new Date(current.collected_at);
+          const latestDate = new Date(latest);
+          return currentDate > latestDate ? current.collected_at : latest;
+        }, data[0].collected_at);
+
+        // 가격 목록도 정수로 반올림
+        const roundedPriceList = priceItems.map(item => ({
+          price: Math.round(item.price),
+          count: item.count
+        }));
+
+        prices[item] = {
+          avgPrice: roundedAvgPrice,
+          lowestPrice: roundedLowestPrice,
+          totalItems,
+          collectedAt: latestCollectedAt,
+          priceList: roundedPriceList
+        };
+      } catch (err) {
+        console.error(`${item} 요청 실패:`, err);
+        prices[item] = null;
       }
+    }
+
+    return prices;
+  } catch (err) {
+    console.error('가격 정보를 가져오는 중 오류가 발생했습니다:', err);
+    return {};
+  }
+}
+
+// 뮤턴트 제작 손익 계산 함수
+function calculateMutantProfit(itemPrices: ItemPrices) {
+  const rabbitFoot = itemPrices?.['돌연변이 토끼의 발'] || null;
+  const plantMucus = itemPrices?.['돌연변이 식물의 점액질'] || null;
+  const sasquatchHeart = itemPrices?.['사스콰치의 심장'] || null;
+  const mutant = itemPrices?.['뮤턴트'] || null;
+
+  // 모든 재료와 결과물의 가격 정보가 있는지 확인
+  const hasAllPrices = 
+    rabbitFoot !== null && 
+    plantMucus !== null && 
+    sasquatchHeart !== null;
+
+  if (hasAllPrices) {
+    // 제작 비용 계산 (재료 10개, 5개, 3개)
+    const materialCost = 
+      (rabbitFoot!.avgPrice * 10) + 
+      (plantMucus!.avgPrice * 5) + 
+      (sasquatchHeart!.avgPrice * 3);
+
+    // 뮤턴트 가격 정보가 있다면 손익 계산
+    if (mutant !== null) {
+      const mutantPrice = mutant.lowestPrice;
+      const profit = mutantPrice - materialCost;
+      const profitPercentage = (profit / materialCost) * 100;
+
+      return {
+        totalCost: materialCost,
+        profit: profit,
+        profitPercentage: profitPercentage,
+        hasAllPrices: true
+      };
     } else {
-      // 필요한 모든 가격 정보가 없는 경우
-      setProfitInfo({
-        totalCost: 0,
+      // 뮤턴트 가격 정보가 없지만 재료 가격은 있는 경우
+      return {
+        totalCost: materialCost,
         profit: 0,
         profitPercentage: 0,
-        hasAllPrices: false
-      });
+        hasAllPrices: true
+      };
     }
-  }, [itemPrices]);
+  } else {
+    // 필요한 모든 가격 정보가 없는 경우
+    return {
+      totalCost: 0,
+      profit: 0,
+      profitPercentage: 0,
+      hasAllPrices: false
+    };
+  }
+}
 
-  useEffect(() => {
-    fetchAllPrices();
-  }, []);
+export default async function TradePage() {
+  // 서버 컴포넌트에서 데이터 가져오기
+  const itemPrices = await fetchItemPrices();
+  const profitInfo = calculateMutantProfit(itemPrices);
 
-  const togglePriceList = (itemName: string) => {
-    setShowPriceList(prev => ({
-      ...prev,
-      [itemName]: !prev[itemName]
-    }));
-  };
-
-  // 아이템 가격 정보 표시 컴포넌트
-  const ItemPriceDisplay = ({ itemName, priceInfo }: { itemName: string, priceInfo: PriceData | null }) => {
-    if (!priceInfo) {
-      return (
-        <div className="text-amber-700">가격 정보 없음</div>
-      );
-    }
-
-    return (
-      <div>
-        <div className="text-amber-700">평균: {Math.round(priceInfo.avgPrice).toLocaleString()} Gold/개</div>
-        <div className="text-xs text-amber-600">최저: {Math.round(priceInfo.lowestPrice).toLocaleString()} Gold/개</div>
-        <div className="text-xs text-amber-600">총 {Math.round(priceInfo.avgPrice * 10).toLocaleString()} Gold</div>
-        <button
-          onClick={() => togglePriceList(itemName)}
-          className="mt-2 text-xs text-amber-600 hover:text-amber-700 flex items-center justify-end w-full"
-        >
-          <span className="mr-1">{showPriceList[itemName] ? '▼' : '▶'}</span>
-          시세 목록 {showPriceList[itemName] ? '접기' : '펼치기'} (최저가 기준 10개 항목)
-        </button>
-        {showPriceList[itemName] && (
-          <div className="mt-1 text-xs space-y-1 text-amber-500 bg-amber-50/50 p-2 rounded">
-            <div className="flex justify-between font-medium border-b border-amber-200 pb-1 mb-1">
-              <span>수량</span>
-              <span>개당 가격</span>
-            </div>
-            {priceInfo.priceList.map((item, index) => (
-              <div key={index} className="flex justify-between">
-                <span>{item.count.toLocaleString()}개</span>
-                <span>{Math.round(item.price).toLocaleString()} Gold</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {priceInfo.collectedAt && (
-          <div className="text-xs text-amber-500 mt-1">
-            데이터 수집: {formatKSTDateTime(priceInfo.collectedAt)}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // 뮤턴트 판매/제작 손익 정보 표시 컴포넌트
-  const MutantProfitDisplay = () => {
-    const mutant = itemPrices?.['뮤턴트'];
-    const mutantPrice = mutant?.lowestPrice || 0;
-
-    if (!profitInfo.hasAllPrices) {
-      return (
-        <div className="mt-4 bg-amber-50 p-3 rounded border border-amber-200">
-          <p className="text-amber-700">재료 가격 정보가 불완전하여 손익을 계산할 수 없습니다.</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="mt-4 bg-amber-50 p-3 rounded border border-amber-200">
-        <h3 className="font-medium text-amber-800 mb-2">뮤턴트 제작 손익 계산</h3>
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span className="text-amber-700">총 재료 비용:</span>
-            <span className="font-medium">{Math.round(profitInfo.totalCost).toLocaleString()} Gold</span>
-          </div>
-          {mutantPrice > 0 && (
-            <>
-              <div className="flex justify-between">
-                <span className="text-amber-700">뮤턴트 최저 판매가:</span>
-                <span className="font-medium">{Math.round(mutantPrice).toLocaleString()} Gold</span>
-              </div>
-              <div className="flex justify-between border-t border-amber-200 pt-1 mt-1">
-                <span className="text-amber-700">예상 {profitInfo.profit >= 0 ? '이익' : '손해'}:</span>
-                <span className={`font-medium ${profitInfo.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {Math.round(profitInfo.profit).toLocaleString()} Gold
-                  <span className="ml-1 text-xs">
-                    ({profitInfo.profit >= 0 ? '+' : ''}{profitInfo.profitPercentage.toFixed(1)}%)
-                  </span>
-                </span>
-              </div>
-              <div className="text-xs text-amber-600 mt-1">
-                * 제작 실패율, 추가 비용 등은 고려되지 않았습니다.
-              </div>
-            </>
-          )}
-          {mutantPrice === 0 && (
-            <div className="text-amber-700">
-              뮤턴트 가격 정보가 없어 손익을 계산할 수 없습니다.
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
+  // ISO 형식 시간 문자열을 한국 시간대로 변환하는 함수
+  const lastUpdated = new Date().toISOString();
+  const formattedLastUpdated = formatKSTDateTime(lastUpdated);
+  
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-amber-900 mb-6">
+      <h1 className="text-2xl font-bold text-amber-900 mb-2">
         물물교역
       </h1>
+      <div className="text-sm text-amber-600 mb-6">
+        마지막 데이터 갱신: {formattedLastUpdated} (5분마다 자동 갱신)
+      </div>
       
       <div className="grid grid-cols-1 gap-6">
         {/* 페라 섹션 */}
@@ -255,14 +192,12 @@ export default function TradePage() {
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-amber-800 font-medium">뮤턴트</span>
                   <div className="flex items-center">
-                    {isLoading ? (
-                      <span className="text-xs text-amber-500">로딩 중...</span>
-                    ) : (
-                      <ItemPriceDisplay 
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
                         itemName="뮤턴트" 
                         priceInfo={itemPrices?.['뮤턴트'] || null}
                       />
-                    )}
+                    </Suspense>
                   </div>
                 </div>
 
@@ -282,7 +217,7 @@ export default function TradePage() {
                 </div>
 
                 {/* 제작 손익 표시 */}
-                {!isLoading && <MutantProfitDisplay />}
+                <MutantProfitCalculator profitInfo={profitInfo} mutantPrice={itemPrices?.['뮤턴트']?.lowestPrice || 0} />
               </li>
 
               {/* 돌연변이 토끼의 발 */}
@@ -290,14 +225,12 @@ export default function TradePage() {
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-amber-800 font-medium">돌연변이 토끼의 발</span>
                   <div className="flex items-center">
-                    {isLoading ? (
-                      <span className="text-xs text-amber-500">로딩 중...</span>
-                    ) : (
-                      <ItemPriceDisplay 
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
                         itemName="돌연변이 토끼의 발" 
                         priceInfo={itemPrices?.['돌연변이 토끼의 발'] || null}
                       />
-                    )}
+                    </Suspense>
                   </div>
                 </div>
               </li>
@@ -307,14 +240,12 @@ export default function TradePage() {
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-amber-800 font-medium">돌연변이 식물의 점액질</span>
                   <div className="flex items-center">
-                    {isLoading ? (
-                      <span className="text-xs text-amber-500">로딩 중...</span>
-                    ) : (
-                      <ItemPriceDisplay 
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
                         itemName="돌연변이 식물의 점액질" 
                         priceInfo={itemPrices?.['돌연변이 식물의 점액질'] || null}
                       />
-                    )}
+                    </Suspense>
                   </div>
                 </div>
               </li>
@@ -324,14 +255,12 @@ export default function TradePage() {
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-amber-800 font-medium">사스콰치의 심장</span>
                   <div className="flex items-center">
-                    {isLoading ? (
-                      <span className="text-xs text-amber-500">로딩 중...</span>
-                    ) : (
-                      <ItemPriceDisplay 
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
                         itemName="사스콰치의 심장" 
                         priceInfo={itemPrices?.['사스콰치의 심장'] || null}
                       />
-                    )}
+                    </Suspense>
                   </div>
                 </div>
               </li>
