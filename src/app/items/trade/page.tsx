@@ -8,9 +8,6 @@ import MutantProfitCalculator from './components/MutantProfitCalculator';
 // 5분마다 페이지 재검증 설정
 export const revalidate = 300; // 5분(300초)
 
-// 개발/프로덕션 모드 확인
-const isDev = process.env.NODE_ENV === 'development';
-
 // 서버 컴포넌트에서 사용할 타입 정의
 interface PriceData {
   avgPrice: number;
