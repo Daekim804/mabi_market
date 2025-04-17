@@ -25,7 +25,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ 
         error: '서버 구성 오류: Supabase 접속 정보가 설정되지 않았습니다.',
         details: '환경 변수가 없음' 
-      }, { status: 500 });
+      }, { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
     }
     
     // 런타임에 Supabase 클라이언트 초기화
@@ -37,7 +43,13 @@ export async function GET(request: Request) {
     console.log('요청된 아이템:', itemName);
 
     if (!itemName) {
-      return NextResponse.json({ error: '아이템 이름이 필요합니다' }, { status: 400 });
+      return NextResponse.json({ error: '아이템 이름이 필요합니다' }, { 
+        status: 400,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
     }
 
     console.log('Supabase 쿼리 시작:', itemName);
@@ -54,7 +66,13 @@ export async function GET(request: Request) {
         return NextResponse.json({ 
           error: '데이터베이스 테이블 접근 오류', 
           details: tableError.message
-        }, { status: 500 });
+        }, { 
+          status: 500,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
       }
       
       console.log('테이블 확인 성공, 레코드 조회 시작');
@@ -79,7 +97,13 @@ export async function GET(request: Request) {
           error: '데이터를 가져오는 중 오류가 발생했습니다.',
           details: error.message,
           code: error.code
-        }, { status: 500 });
+        }, { 
+          status: 500,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
       }
 
       if (!data || data.length === 0) {
@@ -87,7 +111,13 @@ export async function GET(request: Request) {
         return NextResponse.json({ 
           error: '가격 정보가 없습니다.',
           itemName: itemName
-        }, { status: 404 });
+        }, { 
+          status: 404,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+            'Access-Control-Allow-Origin': '*'
+          }
+        });
       }
       
       const auctionData = data as AuctionData[];
@@ -122,21 +152,37 @@ export async function GET(request: Request) {
         count: item.count
       }));
 
-      // 응답에 추가 정보 포함
-      return NextResponse.json({
+      // 응답 데이터 생성
+      const responseData = {
         itemName: itemName,
         avgPrice: roundedAvgPrice,
         lowestPrice: roundedLowestPrice,
         totalItems: totalCount,
         collectedAt: latestCollectedAt,
         priceList: roundedPriceList
+      };
+      
+      console.log(`${itemName} 응답 데이터:`, responseData);
+
+      // 응답에 추가 정보 포함
+      return NextResponse.json(responseData, {
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     } catch (error: unknown) {
       console.error('API 에러:', error);
       const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
       return NextResponse.json(
         { error: `서버 오류가 발생했습니다: ${errorMessage}` },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: {
+            'Cache-Control': 'no-store, max-age=0',
+            'Access-Control-Allow-Origin': '*'
+          }
+        }
       );
     }
   } catch (error: unknown) {
@@ -144,7 +190,13 @@ export async function GET(request: Request) {
     const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
     return NextResponse.json(
       { error: `서버 오류가 발생했습니다: ${errorMessage}` },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+          'Access-Control-Allow-Origin': '*'
+        }
+      }
     );
   }
 }

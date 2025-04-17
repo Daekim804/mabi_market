@@ -47,7 +47,15 @@ export default function TradePage() {
         console.log('API URL:', apiUrl);
         
         try {
-          const response = await fetch(apiUrl);
+          // 캐시를 비활성화하는 fetch 옵션 추가
+          const response = await fetch(apiUrl, {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          
           console.log(`${item} 응답 상태:`, response.status);
           
           if (response.ok) {
