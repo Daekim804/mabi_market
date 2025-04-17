@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Home() {
   return (
@@ -19,7 +20,7 @@ export default function Home() {
         >
           <div className="flex items-center mb-4">
             <div className="bg-amber-200 p-3 rounded-lg mr-4">
-              <img src="/file.svg" alt="Trade icon" width="24" height="24" />
+              <Image src="/file.svg" alt="Trade icon" width={24} height={24} />
             </div>
             <h2 className="text-xl font-semibold text-amber-900">물물교역</h2>
           </div>
@@ -34,7 +35,7 @@ export default function Home() {
         >
           <div className="flex items-center mb-4">
             <div className="bg-amber-200 p-3 rounded-lg mr-4">
-              <img src="/globe.svg" alt="Skills icon" width="24" height="24" />
+              <Image src="/globe.svg" alt="Skills icon" width={24} height={24} />
             </div>
             <h2 className="text-xl font-semibold text-amber-900">스킬</h2>
           </div>

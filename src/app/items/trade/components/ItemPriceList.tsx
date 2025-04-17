@@ -17,11 +17,10 @@ interface PriceData {
 }
 
 interface ItemPriceListProps {
-  itemName: string;
   priceInfo: PriceData | null;
 }
 
-export default function ItemPriceList({ itemName, priceInfo }: ItemPriceListProps) {
+export default function ItemPriceList({ priceInfo }: ItemPriceListProps) {
   const [showPriceList, setShowPriceList] = useState<boolean>(false);
   
   const togglePriceList = () => {

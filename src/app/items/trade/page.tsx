@@ -194,7 +194,6 @@ export default async function TradePage() {
                   <div className="flex items-center">
                     <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
                       <ItemPriceList 
-                        itemName="뮤턴트" 
                         priceInfo={itemPrices?.['뮤턴트'] || null}
                       />
                     </Suspense>
@@ -227,7 +226,6 @@ export default async function TradePage() {
                   <div className="flex items-center">
                     <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
                       <ItemPriceList 
-                        itemName="돌연변이 토끼의 발" 
                         priceInfo={itemPrices?.['돌연변이 토끼의 발'] || null}
                       />
                     </Suspense>
@@ -242,7 +240,6 @@ export default async function TradePage() {
                   <div className="flex items-center">
                     <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
                       <ItemPriceList 
-                        itemName="돌연변이 식물의 점액질" 
                         priceInfo={itemPrices?.['돌연변이 식물의 점액질'] || null}
                       />
                     </Suspense>
@@ -257,7 +254,6 @@ export default async function TradePage() {
                   <div className="flex items-center">
                     <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
                       <ItemPriceList 
-                        itemName="사스콰치의 심장" 
                         priceInfo={itemPrices?.['사스콰치의 심장'] || null}
                       />
                     </Suspense>
