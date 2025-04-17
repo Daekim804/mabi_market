@@ -34,8 +34,15 @@ export async function GET(request: Request) {
       });
     }
     
-    // 런타임에 Supabase 클라이언트 초기화
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    // 런타임에 Supabase 클라이언트 초기화 - fetch 옵션 추가
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false
+      },
+      global: {
+        fetch: fetch
+      }
+    });
     
     const { searchParams } = new URL(request.url);
     const itemName = searchParams.get('itemName');
@@ -55,29 +62,7 @@ export async function GET(request: Request) {
     console.log('Supabase 쿼리 시작:', itemName);
     
     try {
-      // 테이블 존재 여부 확인 쿼리
-      const { error: tableError } = await supabase
-        .from('auction_list')
-        .select('id')
-        .limit(1);
-        
-      if (tableError) {
-        console.error('테이블 접근 오류:', JSON.stringify(tableError));
-        return NextResponse.json({ 
-          error: '데이터베이스 테이블 접근 오류', 
-          details: tableError.message
-        }, { 
-          status: 500,
-          headers: {
-            'Cache-Control': 'no-store, max-age=0',
-            'Access-Control-Allow-Origin': '*'
-          }
-        });
-      }
-      
-      console.log('테이블 확인 성공, 레코드 조회 시작');
-      
-      // 실제 데이터 쿼리
+      // 실제 데이터 쿼리 - 테이블 확인 쿼리 제거하고 바로 데이터 조회
       const { data, error } = await supabase
         .from('auction_list')
         .select('auction_price_per_unit, item_count, collected_at')
