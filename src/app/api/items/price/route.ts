@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     
     try {
       // 테이블 존재 여부 확인 쿼리
-      const { data: tableCheck, error: tableError } = await supabase
+      const { error: tableError } = await supabase
         .from('auction_list')
         .select('id')
         .limit(1);
