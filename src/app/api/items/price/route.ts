@@ -9,6 +9,14 @@ interface AuctionData {
   collected_at: string;
 }
 
+// UTC 시간을 한국 시간(KST)으로 변환하는 함수
+function convertToKST(utcDateString: string): string {
+  const date = new Date(utcDateString);
+  // UTC 시간에 9시간을 더해 한국 시간으로 변환
+  date.setTime(date.getTime() + (9 * 60 * 60 * 1000));
+  return date.toISOString();
+}
+
 // 서버 로그에 민감한 환경 변수 값을 직접 출력하지 않도록 함수 수정
 function logEnvStatus() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -191,6 +199,9 @@ export async function GET(request: Request) {
         return currentDate > latestDate ? current.collected_at : latest;
       }, auctionData[0].collected_at);
 
+      // UTC 시간을 한국 시간(KST)으로 변환
+      const kstCollectedAt = convertToKST(latestCollectedAt);
+
       // 가격 목록도 정수로 반올림
       const roundedPriceList = priceItems.map(item => ({
         price: Math.round(item.price),
@@ -203,7 +214,7 @@ export async function GET(request: Request) {
         avgPrice: roundedAvgPrice,
         lowestPrice: roundedLowestPrice,
         totalItems: totalCount,
-        collectedAt: latestCollectedAt,
+        collectedAt: kstCollectedAt, // 한국 시간으로 변환된 값 사용
         priceList: roundedPriceList
       };
       
@@ -300,6 +311,10 @@ function getFallbackData(itemName: string | null): any {
     return cached.data;
   }
   
+  // 현재 시간을 KST로 변환하여 사용
+  const now = new Date();
+  const kstNow = convertToKST(now.toISOString());
+  
   // 여기에 자주 사용되는 아이템에 대한 기본 폴백 데이터 추가
   const commonItems: Record<string, any> = {
     '돌연변이 토끼의 발': {
@@ -307,7 +322,7 @@ function getFallbackData(itemName: string | null): any {
       avgPrice: 25000,
       lowestPrice: 20000,
       totalItems: 10,
-      collectedAt: new Date().toISOString(),
+      collectedAt: kstNow, // 한국 시간 사용
       priceList: [
         { price: 20000, count: 3 },
         { price: 25000, count: 5 },
