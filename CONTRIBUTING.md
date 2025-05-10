@@ -2,6 +2,51 @@
 
 마비노기 경매장 분석 프로젝트에 기여하기 위한 가이드라인입니다.
 
+## 개발 환경 설정
+
+### 요구 사항
+
+- **운영체제**: Windows 10 이상 (프로젝트는 Windows 환경에 최적화되어 있습니다)
+- **Node.js**: 18.x 이상
+- **npm**: 8.x 이상
+- **Git**: 최신 버전 권장
+
+### 개발 환경 설정하기
+
+1. 프로젝트 클론
+   ```
+   git clone https://github.com/your-username/mabi-market.git
+   cd mabi-market
+   ```
+
+2. 의존성 설치
+   ```
+   npm install
+   ```
+
+3. 개발 서버 실행
+   ```
+   npm run dev
+   ```
+
+### Windows 특화 안내
+
+이 프로젝트는 Windows 환경에서 개발되었으며 다음 사항에 주의하세요:
+
+1. **PowerShell 명령어**: 
+   - 명령어 체이닝에 `&&` 대신 `;` 사용 권장
+   - 예: `cd mabi-market; npm run dev`
+
+2. **경로 표기법**:
+   - Windows에서는 백슬래시(`\`)를 사용하지만, 코드 내에서는 슬래시(`/`)를 사용
+   - 절대 경로를 사용할 때는 Windows 경로 형식 주의
+
+3. **환경 변수**:
+   - Windows에서 환경 변수를 설정할 때는 PowerShell에서 다음과 같이 설정
+   ```
+   $env:NEXT_PUBLIC_VARIABLE_NAME="value"
+   ```
+
 ## 코드 스타일
 
 ### TypeScript 규칙
