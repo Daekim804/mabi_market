@@ -48,13 +48,16 @@ export function findLowestPrice(items: PriceItem[]): number {
  */
 export function formatKSTDateTime(utcDate: string): string {
   const date = new Date(utcDate);
+  
+  // UTC 시간에 한국 시간대(+9시간) 적용
   const kstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
   
-  const year = kstDate.getUTCFullYear();
-  const month = String(kstDate.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(kstDate.getUTCDate()).padStart(2, '0');
-  const hours = String(kstDate.getUTCHours()).padStart(2, '0');
-  const minutes = String(kstDate.getUTCMinutes()).padStart(2, '0');
+  // 로컬 시간으로 포맷팅 (이미 KST로 변환했으므로 UTC 메서드 대신 일반 메서드 사용)
+  const year = kstDate.getFullYear();
+  const month = String(kstDate.getMonth() + 1).padStart(2, '0');
+  const day = String(kstDate.getDate()).padStart(2, '0');
+  const hours = String(kstDate.getHours()).padStart(2, '0');
+  const minutes = String(kstDate.getMinutes()).padStart(2, '0');
   
   return `${year}.${month}.${day} ${hours}:${minutes}`;
 } 
