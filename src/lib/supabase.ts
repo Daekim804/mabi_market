@@ -9,4 +9,31 @@
      console.warn('Supabase 환경 변수가 설정되지 않았습니다');
    }
 
-   export const supabase = createClient(supabaseUrl, supabaseKey);
+   // 개선된 클라이언트 설정
+   export const supabase = createClient(supabaseUrl, supabaseKey, {
+     auth: {
+       persistSession: false,
+       autoRefreshToken: false,
+       detectSessionInUrl: false
+     },
+     global: {
+       headers: {
+         'X-Client-Info': 'supabase-js-client'
+       }
+     }
+   });
+
+   // 서버용 클라이언트 (서버 컴포넌트나 API 라우트에서 사용)
+   export const createServerSupabase = () => {
+     return createClient(supabaseUrl, supabaseKey, {
+       auth: {
+         persistSession: false
+       },
+       global: {
+         fetch: fetch,
+         headers: {
+           'X-Client-Info': 'server-supabase-js'
+         }
+       }
+     });
+   };
