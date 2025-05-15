@@ -4,7 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 import { formatKSTDateTime } from '@/utils/price';
 import ItemPriceList from './components/ItemPriceList';
 import MutantProfitCalculator from './components/MutantProfitCalculator';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // 5분마다 페이지 재검증 설정
 export const revalidate = 300; // 5분(300초)
@@ -198,77 +197,6 @@ async function fetchItemPrices() {
   }
 }
 
-// 백업 방식으로 데이터 가져오기 - 원래 방식 실패 시 사용
-async function fetchItemPricesBackup() {
-  try {
-    console.log('백업 데이터 가져오기 시작');
-    // 백업 방식: 환경 변수에서 직접 값 가져오기
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('백업 방식도 실패: 환경 변수 없음');
-      return sampleData;
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false
-      },
-      global: { 
-        headers: { 'X-Client-Info': 'backup-method' }
-      }
-    });
-
-    // 백업 코드에서는 simplified한 쿼리 수행
-    const items = ['돌연변이 토끼의 발', '돌연변이 식물의 점액질', '사스콰치의 심장', '뮤턴트'];
-    const prices = { ...sampleData }; // 미리 샘플 데이터로 초기화
-
-    for (const item of items) {
-      try {
-        const { data, error } = await supabase
-          .from('auction_list')
-          .select('auction_price_per_unit, item_count, collected_at')
-          .eq('item_name', item)
-          .limit(5);
-
-        if (error || !data || data.length === 0) continue;
-
-        // 가장 낮은 가격 찾기
-        const lowestPrice = Math.min(
-          ...data.map(item => item.auction_price_per_unit)
-        );
-
-        // 평균 가격 계산 (단순 평균)
-        const avgPrice = data.reduce(
-          (sum, item) => sum + item.auction_price_per_unit, 0
-        ) / data.length;
-
-        prices[item] = {
-          avgPrice: Math.round(avgPrice),
-          lowestPrice: Math.round(lowestPrice),
-          totalItems: data.length,
-          collectedAt: new Date().toISOString(),
-          priceList: data.map(item => ({
-            price: Math.round(item.auction_price_per_unit),
-            count: item.item_count
-          }))
-        };
-      } catch (err) {
-        console.error(`백업 방식도 실패: ${item}`, err);
-        // 이미 샘플 데이터로 초기화되어 있으므로 조치 불필요
-      }
-    }
-
-    return prices;
-  } catch (err) {
-    console.error('백업 데이터 가져오기 실패:', err);
-    return sampleData;
-  }
-}
-
 // 뮤턴트 제작 손익 계산 함수
 function calculateMutantProfit(itemPrices: ItemPrices) {
   const rabbitFoot = itemPrices?.['돌연변이 토끼의 발'] || null;
@@ -322,70 +250,148 @@ function calculateMutantProfit(itemPrices: ItemPrices) {
 }
 
 export default async function TradePage() {
+  // 서버 사이드 데이터 가져오기 시도
+  let dataFetchFailed = false;
+  let itemPrices: ItemPrices = {};
+  
   try {
-    let priceData;
-    
-    // 첫 번째 방식으로 데이터 가져오기 시도
-    try {
-      priceData = await fetchItemPrices();
-    } catch (err) {
-      console.error('기본 데이터 로딩 실패, 백업 방식 시도:', err);
-      priceData = await fetchItemPricesBackup();
-    }
-
-    const mutantProfit = calculateMutantProfit(priceData);
-
-    return (
-      <ErrorBoundary>
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-amber-900 mb-6">
-            물물교역 가격 정보
-          </h1>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* 뮤턴트 제작 손익 */}
-            <div className="bg-amber-50 rounded-lg border border-amber-200 p-6">
-              <h2 className="text-xl font-semibold text-amber-900 mb-4">뮤턴트 제작 손익</h2>
-              <MutantProfitCalculator profitData={mutantProfit} />
-            </div>
-
-            {/* 재료 시세 현황 */}
-            <div className="bg-amber-50 rounded-lg border border-amber-200 p-6">
-              <h2 className="text-xl font-semibold text-amber-900 mb-4">재료 시세</h2>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium text-amber-800">돌연변이 토끼의 발 (10개)</h3>
-                  <ItemPriceList priceInfo={priceData['돌연변이 토끼의 발']} />
-                </div>
-                <div>
-                  <h3 className="font-medium text-amber-800">돌연변이 식물의 점액질 (10개)</h3>
-                  <ItemPriceList priceInfo={priceData['돌연변이 식물의 점액질']} />
-                </div>
-                <div>
-                  <h3 className="font-medium text-amber-800">사스콰치의 심장 (5개)</h3>
-                  <ItemPriceList priceInfo={priceData['사스콰치의 심장']} />
-                </div>
-                <div>
-                  <h3 className="font-medium text-amber-800">뮤턴트 (1개)</h3>
-                  <ItemPriceList priceInfo={priceData['뮤턴트']} />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </ErrorBoundary>
-    );
+    itemPrices = await fetchItemPrices();
   } catch (error) {
-    console.error('TradePage 렌더링 오류:', error);
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-amber-50 rounded-lg border border-amber-200 p-6 mb-6">
-          <h1 className="text-2xl font-bold text-amber-800 mb-2">데이터 로딩 오류</h1>
-          <p className="text-amber-700">
-            가격 정보를 불러오는 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.
-          </p>
-        </div>
-      </div>
-    );
+    console.error('서버 컴포넌트 데이터 로딩 오류:', error);
+    dataFetchFailed = true;
+    itemPrices = sampleData; // 오류 시 샘플 데이터 사용
   }
+  
+  const profitInfo = calculateMutantProfit(itemPrices);
+
+  // ISO 형식 시간 문자열을 한국 시간대로 변환하는 함수
+  const lastUpdated = new Date().toISOString();
+  const formattedLastUpdated = formatKSTDateTime(lastUpdated);
+  
+  return (
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold text-amber-900 mb-2">
+        물물교역
+      </h1>
+      <div className="text-sm text-amber-600 mb-6">
+        마지막 데이터 갱신: {formattedLastUpdated} (5분마다 자동 갱신)
+        {dataFetchFailed && <span className="ml-2 text-red-500">(샘플 데이터 표시 중)</span>}
+      </div>
+      
+      <div className="grid grid-cols-1 gap-6">
+        {/* 페라 섹션 */}
+        <section className="bg-amber-50 rounded-xl p-6 border border-amber-200">
+          <h2 className="text-xl font-semibold text-amber-800 mb-4">페라</h2>
+          
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <ul className="divide-y divide-amber-100">
+              {/* 뮤턴트 아이템 */}
+              <li className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-800 font-medium">뮤턴트</span>
+                  <div className="flex items-center">
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
+                        priceInfo={itemPrices?.['뮤턴트'] || null}
+                      />
+                    </Suspense>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50/50 rounded p-2 mt-2">
+                  <div className="font-medium text-amber-800 mb-1">제작 재료:</div>
+                  <ul className="space-y-2">
+                    <li className="flex justify-between items-start">
+                      <span className="text-amber-700">돌연변이 토끼의 발 × 10</span>
+                    </li>
+                    <li className="flex justify-between items-start">
+                      <span className="text-amber-700">돌연변이 식물의 점액질 × 5</span>
+                    </li>
+                    <li className="flex justify-between items-start">
+                      <span className="text-amber-700">사스콰치의 심장 × 3</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* 제작 손익 표시 */}
+                <MutantProfitCalculator profitInfo={profitInfo} mutantPrice={itemPrices?.['뮤턴트']?.lowestPrice || 0} />
+              </li>
+
+              {/* 돌연변이 토끼의 발 */}
+              <li className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-800 font-medium">돌연변이 토끼의 발</span>
+                  <div className="flex items-center">
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
+                        priceInfo={itemPrices?.['돌연변이 토끼의 발'] || null}
+                      />
+                    </Suspense>
+                  </div>
+                </div>
+              </li>
+
+              {/* 돌연변이 식물의 점액질 */}
+              <li className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-800 font-medium">돌연변이 식물의 점액질</span>
+                  <div className="flex items-center">
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
+                        priceInfo={itemPrices?.['돌연변이 식물의 점액질'] || null}
+                      />
+                    </Suspense>
+                  </div>
+                </div>
+              </li>
+
+              {/* 사스콰치의 심장 */}
+              <li className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-800 font-medium">사스콰치의 심장</span>
+                  <div className="flex items-center">
+                    <Suspense fallback={<div className="text-xs text-amber-500">로딩 중...</div>}>
+                      <ItemPriceList 
+                        priceInfo={itemPrices?.['사스콰치의 심장'] || null}
+                      />
+                    </Suspense>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </section>
+        
+        {/* 칼리다 섹션 */}
+        <section className="bg-amber-50 rounded-xl p-6 border border-amber-200">
+          <h2 className="text-xl font-semibold text-amber-800 mb-4">칼리다</h2>
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <p className="text-amber-800">
+              칼리다 지역 교역 아이템 데이터가 이곳에 표시됩니다.
+            </p>
+          </div>
+        </section>
+        
+        {/* 오아시스 섹션 */}
+        <section className="bg-amber-50 rounded-xl p-6 border border-amber-200">
+          <h2 className="text-xl font-semibold text-amber-800 mb-4">오아시스</h2>
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <p className="text-amber-800">
+              오아시스 지역 교역 아이템 데이터가 이곳에 표시됩니다.
+            </p>
+          </div>
+        </section>
+        
+        {/* 카루 숲 섹션 */}
+        <section className="bg-amber-50 rounded-xl p-6 border border-amber-200">
+          <h2 className="text-xl font-semibold text-amber-800 mb-4">카루 숲</h2>
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <p className="text-amber-800">
+              카루 숲 지역 교역 아이템 데이터가 이곳에 표시됩니다.
+            </p>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
 } 

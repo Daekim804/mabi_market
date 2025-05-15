@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Suspense } from "react";
 import "./globals.css";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -23,15 +22,7 @@ export default function RootLayout({
         <div className="min-h-screen flex flex-col">
           <Header />
           <main className="flex-1 container mx-auto px-4 py-8">
-            <Suspense fallback={
-              <div className="bg-amber-50 rounded-xl p-6 border border-amber-200 animate-pulse">
-                <div className="h-8 bg-amber-200/50 rounded w-1/4 mb-6"></div>
-                <div className="h-32 bg-amber-100/50 rounded mb-4"></div>
-                <div className="h-32 bg-amber-100/50 rounded"></div>
-              </div>
-            }>
-              {children}
-            </Suspense>
+            {children}
           </main>
           <Footer />
         </div>
