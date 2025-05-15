@@ -5,6 +5,7 @@ interface ProfitInfoProps {
   profit: number;
   profitPercentage: number;
   hasAllPrices: boolean;
+  error?: string;
 }
 
 interface MutantProfitCalculatorProps {
@@ -13,10 +14,24 @@ interface MutantProfitCalculatorProps {
 }
 
 export default function MutantProfitCalculator({ profitInfo, mutantPrice }: MutantProfitCalculatorProps) {
+  if (profitInfo.error) {
+    return (
+      <div className="mt-4 bg-amber-50 p-3 rounded border border-amber-200">
+        <p className="text-red-600">
+          <span>손익 계산을 할 수 없음</span>
+          <div className="text-xs mt-1">{profitInfo.error}</div>
+        </p>
+      </div>
+    );
+  }
+
   if (!profitInfo.hasAllPrices) {
     return (
       <div className="mt-4 bg-amber-50 p-3 rounded border border-amber-200">
-        <p className="text-amber-700">재료 가격 정보가 불완전하여 손익을 계산할 수 없습니다.</p>
+        <p className="text-red-600">
+          <span>재료 가격 정보를 불러올 수 없음</span>
+          <div className="text-xs mt-1">일부 또는 모든 재료의 가격 정보가 누락되었습니다.</div>
+        </p>
       </div>
     );
   }
@@ -50,8 +65,9 @@ export default function MutantProfitCalculator({ profitInfo, mutantPrice }: Muta
           </>
         )}
         {mutantPrice === 0 && (
-          <div className="text-amber-700">
-            뮤턴트 가격 정보가 없어 손익을 계산할 수 없습니다.
+          <div className="text-red-600">
+            <span>뮤턴트 가격 정보를 불러올 수 없음</span>
+            <div className="text-xs mt-1">뮤턴트 가격 정보가 없어 손익을 계산할 수 없습니다.</div>
           </div>
         )}
       </div>

@@ -18,6 +18,7 @@ interface PriceData {
     price: number;
     count: number;
   }>;
+  error?: string; // 오류 메시지 필드 추가
 }
 
 interface ItemPrices {
@@ -80,8 +81,14 @@ async function fetchItemPrices() {
 
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error('환경 변수 오류: Supabase 접속 정보가 없습니다');
-      console.log('샘플 데이터 사용 중...');
-      return sampleData; // 환경 변수 없을 때 샘플 데이터 반환
+      
+      // 오류 정보를 포함한 객체 반환
+      return {
+        '돌연변이 토끼의 발': { error: '환경 변수 오류: Supabase 접속 정보가 없습니다' },
+        '돌연변이 식물의 점액질': { error: '환경 변수 오류: Supabase 접속 정보가 없습니다' },
+        '사스콰치의 심장': { error: '환경 변수 오류: Supabase 접속 정보가 없습니다' },
+        '뮤턴트': { error: '환경 변수 오류: Supabase 접속 정보가 없습니다' }
+      } as unknown as ItemPrices;
     }
 
     // 커스텀 fetch 함수 생성
@@ -118,13 +125,14 @@ async function fetchItemPrices() {
 
         if (error) {
           console.error(`${item} 데이터 오류:`, error);
+          prices[item] = { error: `데이터 조회 오류: ${error.message}` } as unknown as PriceData | null;
           hasError = true;
           continue;
         }
 
         if (!data || data.length === 0) {
           console.log(`${item} 데이터 없음`);
-          prices[item] = null;
+          prices[item] = { error: '가격 정보가 없습니다' } as unknown as PriceData | null;
           continue;
         }
 
@@ -167,33 +175,23 @@ async function fetchItemPrices() {
         };
       } catch (err) {
         console.error(`${item} 요청 실패:`, err);
+        prices[item] = { error: `데이터 요청 실패: ${err instanceof Error ? err.message : String(err)}` } as unknown as PriceData | null;
         hasError = true;
-        prices[item] = null;
       }
     }
 
-    // 데이터 조회 중 오류가 발생했거나 데이터가 없는 경우 샘플 데이터로 대체
-    if (hasError || Object.keys(prices).length === 0) {
-      console.log('데이터 조회 오류 또는 데이터 없음, 샘플 데이터 사용');
-      
-      // 실제 데이터와 샘플 데이터 병합
-      const mergedData = { ...sampleData };
-      
-      // 실제 가져온 데이터가 있으면 덮어쓰기
-      Object.keys(prices).forEach(item => {
-        if (prices[item] !== null) {
-          mergedData[item] = prices[item];
-        }
-      });
-      
-      return mergedData;
-    }
-
+    // 모든 아이템에 대해 데이터가 없거나 오류가 있는 경우에도 가져온 정보 반환
     return prices;
   } catch (err) {
     console.error('가격 정보를 가져오는 중 오류가 발생했습니다:', err);
-    console.log('샘플 데이터 사용 중...');
-    return sampleData; // 오류 발생 시 샘플 데이터 반환
+    
+    // 오류 정보를 포함한 객체 반환
+    return {
+      '돌연변이 토끼의 발': { error: `가격 정보를 가져오는 중 오류 발생: ${err instanceof Error ? err.message : String(err)}` },
+      '돌연변이 식물의 점액질': { error: `가격 정보를 가져오는 중 오류 발생: ${err instanceof Error ? err.message : String(err)}` },
+      '사스콰치의 심장': { error: `가격 정보를 가져오는 중 오류 발생: ${err instanceof Error ? err.message : String(err)}` },
+      '뮤턴트': { error: `가격 정보를 가져오는 중 오류 발생: ${err instanceof Error ? err.message : String(err)}` }
+    } as unknown as ItemPrices;
   }
 }
 
@@ -204,21 +202,37 @@ function calculateMutantProfit(itemPrices: ItemPrices) {
   const sasquatchHeart = itemPrices?.['사스콰치의 심장'] || null;
   const mutant = itemPrices?.['뮤턴트'] || null;
 
+  // 오류가 있는지 확인
+  const errors = [];
+  if (rabbitFoot && 'error' in rabbitFoot) errors.push(`돌연변이 토끼의 발: ${rabbitFoot.error}`);
+  if (plantMucus && 'error' in plantMucus) errors.push(`돌연변이 식물의 점액질: ${plantMucus.error}`);
+  if (sasquatchHeart && 'error' in sasquatchHeart) errors.push(`사스콰치의 심장: ${sasquatchHeart.error}`);
+
+  if (errors.length > 0) {
+    return {
+      totalCost: 0,
+      profit: 0,
+      profitPercentage: 0,
+      hasAllPrices: false,
+      error: errors.join('\n')
+    };
+  }
+
   // 모든 재료와 결과물의 가격 정보가 있는지 확인
   const hasAllPrices = 
-    rabbitFoot !== null && 
-    plantMucus !== null && 
-    sasquatchHeart !== null;
+    rabbitFoot !== null && !('error' in rabbitFoot) && 
+    plantMucus !== null && !('error' in plantMucus) && 
+    sasquatchHeart !== null && !('error' in sasquatchHeart);
 
   if (hasAllPrices) {
     // 제작 비용 계산 (재료 10개, 5개, 3개)
     const materialCost = 
-      (rabbitFoot!.avgPrice * 10) + 
-      (plantMucus!.avgPrice * 5) + 
-      (sasquatchHeart!.avgPrice * 3);
+      (rabbitFoot!.avgPrice! * 10) + 
+      (plantMucus!.avgPrice! * 5) + 
+      (sasquatchHeart!.avgPrice! * 3);
 
     // 뮤턴트 가격 정보가 있다면 손익 계산
-    if (mutant !== null) {
+    if (mutant !== null && !('error' in mutant) && mutant.lowestPrice) {
       const mutantPrice = mutant.lowestPrice;
       const profit = mutantPrice - materialCost;
       const profitPercentage = (profit / materialCost) * 100;

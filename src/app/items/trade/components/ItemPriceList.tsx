@@ -9,11 +9,12 @@ interface PriceItemProps {
 }
 
 interface PriceData {
-  avgPrice: number;
-  lowestPrice: number;
-  totalItems: number;
-  collectedAt: string;
-  priceList: Array<PriceItemProps>;
+  avgPrice?: number;
+  lowestPrice?: number;
+  totalItems?: number;
+  collectedAt?: string;
+  priceList?: Array<PriceItemProps>;
+  error?: string;
 }
 
 interface ItemPriceListProps {
@@ -30,6 +31,24 @@ export default function ItemPriceList({ priceInfo }: ItemPriceListProps) {
   if (!priceInfo) {
     return (
       <div className="text-amber-700">가격 정보 없음</div>
+    );
+  }
+
+  if (priceInfo.error) {
+    return (
+      <div className="text-red-600">
+        <div>가격 정보를 불러올 수 없음</div>
+        <div className="text-xs mt-1">{priceInfo.error}</div>
+      </div>
+    );
+  }
+
+  if (!priceInfo.avgPrice || !priceInfo.lowestPrice || !priceInfo.priceList) {
+    return (
+      <div className="text-red-600">
+        <div>가격 정보를 불러올 수 없음</div>
+        <div className="text-xs mt-1">필요한 가격 데이터가 없습니다</div>
+      </div>
     );
   }
 
