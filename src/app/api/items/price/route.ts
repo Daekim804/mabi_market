@@ -12,6 +12,22 @@ interface AuctionData {
 // 메모리 캐시 객체 (서버 재시작 시까지 유지)
 const responseCache = new Map<string, { data: any; timestamp: number }>();
 
+// CORS 헤더 설정
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Max-Age': '86400',
+};
+
+// OPTIONS 요청 처리 (CORS preflight)
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: corsHeaders
+  });
+}
+
 // 환경 변수 상태 로깅 함수
 function logEnvStatus() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -20,13 +36,15 @@ function logEnvStatus() {
   console.log('=== 환경 변수 상태 확인 ===');
   console.log('- NODE_ENV:', process.env.NODE_ENV);
   console.log('- VERCEL_ENV:', process.env.VERCEL_ENV);
+  console.log('- VERCEL_REGION:', process.env.VERCEL_REGION);
   console.log('- SUPABASE_URL 설정됨:', !!supabaseUrl);
   console.log('- SUPABASE_URL 길이:', supabaseUrl?.length || 0);
   console.log('- ANON_KEY 설정됨:', !!supabaseAnonKey);
   console.log('- ANON_KEY 길이:', supabaseAnonKey?.length || 0);
   
   if (supabaseUrl) {
-    console.log('- SUPABASE_URL 시작:', supabaseUrl.substring(0, 20) + '...');
+    console.log('- SUPABASE_URL 시작:', supabaseUrl.substring(0, 30) + '...');
+    console.log('- URL 형식 유효:', supabaseUrl.startsWith('https://'));
   }
   
   return { supabaseUrl, supabaseAnonKey };
@@ -58,7 +76,50 @@ function getFallbackData(itemName: string | null): any {
         { price: 25000, count: 5 },
         { price: 30000, count: 2 }
       ],
-      isFallback: true
+      isFallback: true,
+      fallbackReason: 'database_unavailable'
+    },
+    '돌연변이 식물의 점액질': {
+      itemName: '돌연변이 식물의 점액질',
+      avgPrice: 18000,
+      lowestPrice: 15000,
+      totalItems: 8,
+      collectedAt: now,
+      priceList: [
+        { price: 15000, count: 3 },
+        { price: 18000, count: 4 },
+        { price: 22000, count: 1 }
+      ],
+      isFallback: true,
+      fallbackReason: 'database_unavailable'
+    },
+    '사스콰치의 심장': {
+      itemName: '사스콰치의 심장',
+      avgPrice: 35000,
+      lowestPrice: 30000,
+      totalItems: 5,
+      collectedAt: now,
+      priceList: [
+        { price: 30000, count: 2 },
+        { price: 35000, count: 2 },
+        { price: 40000, count: 1 }
+      ],
+      isFallback: true,
+      fallbackReason: 'database_unavailable'
+    },
+    '뮤턴트': {
+      itemName: '뮤턴트',
+      avgPrice: 45000,
+      lowestPrice: 40000,
+      totalItems: 6,
+      collectedAt: now,
+      priceList: [
+        { price: 40000, count: 2 },
+        { price: 45000, count: 3 },
+        { price: 50000, count: 1 }
+      ],
+      isFallback: true,
+      fallbackReason: 'database_unavailable'
     },
     '고급 가죽': {
       itemName: '고급 가죽',
@@ -71,7 +132,8 @@ function getFallbackData(itemName: string | null): any {
         { price: 15000, count: 7 },
         { price: 18000, count: 3 }
       ],
-      isFallback: true
+      isFallback: true,
+      fallbackReason: 'database_unavailable'
     },
     '실크': {
       itemName: '실크',
@@ -84,7 +146,8 @@ function getFallbackData(itemName: string | null): any {
         { price: 8000, count: 10 },
         { price: 10000, count: 2 }
       ],
-      isFallback: true
+      isFallback: true,
+      fallbackReason: 'database_unavailable'
     }
   };
   
@@ -98,7 +161,8 @@ function getFallbackData(itemName: string | null): any {
       { price: 8000, count: 2 },
       { price: 10000, count: 3 }
     ],
-    isFallback: true
+    isFallback: true,
+    fallbackReason: 'item_not_found'
   };
 }
 
@@ -131,13 +195,21 @@ export async function GET(request: Request) {
     console.log('=== API 요청 시작 ===');
     console.log('요청된 아이템:', itemName);
     console.log('요청 시간:', new Date().toISOString());
+    console.log('요청 헤더:', {
+      userAgent: request.headers.get('user-agent'),
+      origin: request.headers.get('origin'),
+      referer: request.headers.get('referer')
+    });
 
     if (!itemName) {
-      return NextResponse.json({ error: '아이템 이름이 필요합니다' }, { 
+      return NextResponse.json({ 
+        error: '아이템 이름이 필요합니다',
+        code: 'MISSING_ITEM_NAME'
+      }, { 
         status: 400,
         headers: {
-          'Cache-Control': 'no-store, max-age=0',
-          'Access-Control-Allow-Origin': '*'
+          ...corsHeaders,
+          'Cache-Control': 'no-store, max-age=0'
         }
       });
     }
@@ -148,9 +220,10 @@ export async function GET(request: Request) {
       const fallbackData = getFallbackData(itemName);
       return NextResponse.json(fallbackData, {
         headers: {
+          ...corsHeaders,
           'Cache-Control': 'public, max-age=1800',
-          'Access-Control-Allow-Origin': '*',
-          'X-Data-Source': 'fallback-env-missing'
+          'X-Data-Source': 'fallback-env-missing',
+          'X-Response-Time': `${Date.now() - startTime}ms`
         }
       });
     }
@@ -198,134 +271,121 @@ export async function GET(request: Request) {
         
         // 오류 발생 시 폴백 데이터 사용
         const fallbackData = getFallbackData(itemName);
+        fallbackData.fallbackReason = `database_error: ${error.code || 'unknown'}`;
+        
         return NextResponse.json(fallbackData, {
           headers: {
-            'Cache-Control': 'public, max-age=1800',
-            'Access-Control-Allow-Origin': '*',
-            'X-Data-Source': 'fallback-error',
-            'X-Error-Code': error.code || 'unknown'
+            ...corsHeaders,
+            'Cache-Control': 'public, max-age=900',
+            'X-Data-Source': 'fallback-db-error',
+            'X-Error-Code': error.code || 'unknown',
+            'X-Response-Time': `${Date.now() - startTime}ms`
           }
         });
       }
 
       if (!data || data.length === 0) {
-        console.log('데이터 없음:', itemName);
-        
-        // 데이터가 없을 때 폴백 데이터 사용
+        console.log('데이터 없음 - 폴백 데이터 사용');
         const fallbackData = getFallbackData(itemName);
+        fallbackData.fallbackReason = 'no_data_found';
+        
         return NextResponse.json(fallbackData, {
           headers: {
+            ...corsHeaders,
             'Cache-Control': 'public, max-age=1800',
-            'Access-Control-Allow-Origin': '*',
-            'X-Data-Source': 'fallback-no-data'
+            'X-Data-Source': 'fallback-no-data',
+            'X-Response-Time': `${Date.now() - startTime}ms`
           }
         });
       }
-      
-      // 정상 데이터 처리
-      const auctionData = data as AuctionData[];
 
-      const priceItems = auctionData.map(item => ({
+      // 데이터 처리
+      const auctionData: AuctionData[] = data;
+      const prices = auctionData.map(item => item.auction_price_per_unit);
+      const counts = auctionData.map(item => item.item_count);
+      
+      const lowestPrice = Math.min(...prices);
+      const avgPrice = calculateWeightedAverage(prices, counts);
+      const totalItems = auctionData.reduce((sum, item) => sum + item.item_count, 0);
+      
+      const priceList = auctionData.map(item => ({
         price: item.auction_price_per_unit,
         count: item.item_count
       }));
 
-      const { weightedAvg, totalCount } = calculateWeightedAverage(
-        priceItems,
-        'price',
-        'count'
-      );
-
-      const roundedAvgPrice = Math.round(weightedAvg);
-      const roundedLowestPrice = Math.round(auctionData[0].auction_price_per_unit);
-
-      const latestCollectedAt = auctionData.reduce((latest, current) => {
-        const currentDate = new Date(current.collected_at);
-        const latestDate = new Date(latest);
-        return currentDate > latestDate ? current.collected_at : latest;
-      }, auctionData[0].collected_at);
-
-      const roundedPriceList = priceItems.map(item => ({
-        price: Math.round(item.price),
-        count: item.count
-      }));
-
       const responseData = {
-        itemName: itemName,
-        avgPrice: roundedAvgPrice,
-        lowestPrice: roundedLowestPrice,
-        totalItems: totalCount,
-        collectedAt: latestCollectedAt,
-        priceList: roundedPriceList,
+        itemName,
+        avgPrice: Math.round(avgPrice),
+        lowestPrice,
+        totalItems,
+        collectedAt: auctionData[0]?.collected_at || new Date().toISOString(),
+        priceList,
+        dataSource: 'database',
         queryTime: Date.now() - startTime
       };
-      
+
       // 성공한 데이터 캐싱
       cacheResponseData(itemName, responseData);
-      
-      console.log(`${itemName} 성공 응답:`, {
-        avgPrice: roundedAvgPrice,
-        totalItems: totalCount,
-        queryTime: responseData.queryTime + 'ms'
+
+      console.log('API 응답 성공:', {
+        itemName,
+        avgPrice: responseData.avgPrice,
+        lowestPrice: responseData.lowestPrice,
+        totalItems: responseData.totalItems,
+        responseTime: Date.now() - startTime + 'ms'
       });
 
       return NextResponse.json(responseData, {
         headers: {
-          'Cache-Control': 'public, max-age=300',
-          'Access-Control-Allow-Origin': '*',
-          'X-Data-Source': 'supabase'
+          ...corsHeaders,
+          'Cache-Control': 'public, max-age=300, stale-while-revalidate=600',
+          'X-Data-Source': 'database',
+          'X-Response-Time': `${Date.now() - startTime}ms`
         }
       });
 
-    } catch (dbError: unknown) {
-      console.error('데이터베이스 연결 오류:', dbError);
-      
-      // 데이터베이스 연결 실패 시 폴백 데이터 사용
+    } catch (dbError) {
+      console.error('데이터베이스 연결 오류:', {
+        error: dbError instanceof Error ? dbError.message : dbError,
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+        itemName,
+        queryTime: Date.now() - startTime + 'ms'
+      });
+
+      // 데이터베이스 오류 시 폴백 데이터 사용
       const fallbackData = getFallbackData(itemName);
+      fallbackData.fallbackReason = `connection_error: ${dbError instanceof Error ? dbError.message : 'unknown'}`;
+
       return NextResponse.json(fallbackData, {
         headers: {
-          'Cache-Control': 'public, max-age=1800',
-          'Access-Control-Allow-Origin': '*',
-          'X-Data-Source': 'fallback-db-error'
+          ...corsHeaders,
+          'Cache-Control': 'public, max-age=600',
+          'X-Data-Source': 'fallback-connection-error',
+          'X-Response-Time': `${Date.now() - startTime}ms`
         }
       });
     }
 
-  } catch (error: unknown) {
-    console.error('API 최상위 오류:', error);
-    const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
-    
-    // 최상위 오류 시에도 폴백 데이터 시도
-    try {
-      const itemName = new URL(request.url).searchParams.get('itemName');
-      const fallbackData = itemName ? getFallbackData(itemName) : null;
-      
-      if (fallbackData) {
-        console.log('최상위 오류 - 폴백 데이터 사용');
-        return NextResponse.json(fallbackData, {
-          headers: {
-            'Cache-Control': 'public, max-age=1800',
-            'Access-Control-Allow-Origin': '*',
-            'X-Data-Source': 'fallback-top-error'
-          }
-        });
+  } catch (error) {
+    console.error('API 라우트 전체 오류:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      responseTime: Date.now() - startTime + 'ms'
+    });
+
+    // 최종 폴백 응답
+    return NextResponse.json({
+      error: '서버 오류가 발생했습니다',
+      code: 'INTERNAL_SERVER_ERROR',
+      message: error instanceof Error ? error.message : '알 수 없는 오류',
+      timestamp: new Date().toISOString()
+    }, {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        'Cache-Control': 'no-store, max-age=0',
+        'X-Response-Time': `${Date.now() - startTime}ms`
       }
-    } catch (fallbackError) {
-      console.error('폴백 데이터 생성 실패:', fallbackError);
-    }
-    
-    return NextResponse.json(
-      { 
-        error: `서버 오류가 발생했습니다: ${errorMessage}`,
-        timestamp: new Date().toISOString()
-      },
-      { 
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-store, max-age=0',
-          'Access-Control-Allow-Origin': '*'
-        }
-      }
-    );
+    });
   }
 }

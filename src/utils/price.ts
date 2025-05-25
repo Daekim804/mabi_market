@@ -14,9 +14,42 @@ export function calculateWeightedAverage(
   items: PriceItem[],
   priceKey: keyof PriceItem,
   countKey: keyof PriceItem
-): { weightedAvg: number; totalCount: number } {
-  const totalCount = items.reduce((sum, item) => sum + item[countKey], 0);
-  const weightedSum = items.reduce((sum, item) => sum + (item[priceKey] * item[countKey]), 0);
+): { weightedAvg: number; totalCount: number };
+
+/**
+ * 가격 배열과 수량 배열로 가중 평균을 계산합니다.
+ * @param prices 가격 배열
+ * @param counts 수량 배열
+ * @returns 가중 평균 가격
+ */
+export function calculateWeightedAverage(
+  prices: number[],
+  counts: number[]
+): number;
+
+export function calculateWeightedAverage(
+  itemsOrPrices: PriceItem[] | number[],
+  priceKeyOrCounts?: keyof PriceItem | number[],
+  countKey?: keyof PriceItem
+): { weightedAvg: number; totalCount: number } | number {
+  // 배열 오버로드 처리
+  if (Array.isArray(itemsOrPrices) && Array.isArray(priceKeyOrCounts)) {
+    const prices = itemsOrPrices as number[];
+    const counts = priceKeyOrCounts as number[];
+    
+    const totalCount = counts.reduce((sum, count) => sum + count, 0);
+    const weightedSum = prices.reduce((sum, price, index) => sum + (price * counts[index]), 0);
+    
+    return totalCount > 0 ? weightedSum / totalCount : 0;
+  }
+  
+  // 객체 배열 오버로드 처리
+  const items = itemsOrPrices as PriceItem[];
+  const priceKey = priceKeyOrCounts as keyof PriceItem;
+  const countKeyFinal = countKey as keyof PriceItem;
+  
+  const totalCount = items.reduce((sum, item) => sum + item[countKeyFinal], 0);
+  const weightedSum = items.reduce((sum, item) => sum + (item[priceKey] * item[countKeyFinal]), 0);
   const weightedAvg = totalCount > 0 ? weightedSum / totalCount : 0;
 
   return { weightedAvg, totalCount };
