@@ -73,6 +73,92 @@ const sampleData: ItemPrices = {
   }
 };
 
+// 재시도 로직이 포함된 fetch 함수
+async function fetchWithRetry(url: string, options: RequestInit = {}, maxRetries = 3): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`API 호출 시도 ${attempt}/${maxRetries}:`, url);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          ...options.headers
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      console.log(`API 호출 성공 (시도 ${attempt}):`, response.status);
+      return response;
+      
+    } catch (error) {
+      console.error(`API 호출 시도 ${attempt} 실패:`, error);
+      
+      // 네트워크 오류인 경우 재시도
+      if (error instanceof Error && 
+          (error.message.includes('fetch failed') ||
+           error.message.includes('network') ||
+           error.message.includes('timeout') ||
+           error.message.includes('aborted') ||
+           error.name === 'AbortError' ||
+           error.name === 'TypeError')) {
+        
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // 지수 백오프
+          console.log(`${delay}ms 후 재시도...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      throw error;
+    }
+  }
+  
+  throw new Error(`${maxRetries}번 시도 후 실패`);
+}
+
+// 아이템 가격 정보를 가져오는 함수 (재시도 로직 포함)
+async function fetchItemPrice(itemName: string): Promise<PriceData> {
+  try {
+    const response = await fetchWithRetry(`/api/items/price?itemName=${encodeURIComponent(itemName)}`);
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error(`${itemName} 데이터 오류:`, {
+      message: error instanceof Error ? error.message : '알 수 없는 오류',
+      details: error instanceof Error ? error.stack : error,
+      hint: '네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.',
+      code: error instanceof Error ? error.name : ''
+    });
+    
+    // 오류 발생 시 기본값 반환
+    return {
+      avgPrice: 0,
+      lowestPrice: 0,
+      totalItems: 0,
+      collectedAt: new Date().toISOString(),
+      priceList: [],
+      error: `client_error: ${error instanceof Error ? error.message : 'unknown'}`
+    };
+  }
+}
+
 // 서버 컴포넌트에서 데이터 가져오기
 async function fetchItemPrices() {
   try {
@@ -104,12 +190,41 @@ async function fetchItemPrices() {
       try {
         console.log(`${item} 데이터 요청 시작`);
         
-        const { data, error } = await supabase
-          .from('auction_list')
-          .select('auction_price_per_unit, item_count, collected_at')
-          .eq('item_name', item)
-          .order('auction_price_per_unit', { ascending: true })
-          .limit(10);
+        // 재시도 로직 적용
+        let data = null;
+        let error = null;
+        
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`${item} 쿼리 시도 ${attempt}/3`);
+            
+            const result = await supabase
+              .from('auction_list')
+              .select('auction_price_per_unit, item_count, collected_at')
+              .eq('item_name', item)
+              .order('auction_price_per_unit', { ascending: true })
+              .limit(10);
+            
+            data = result.data;
+            error = result.error;
+            
+            if (!error) {
+              console.log(`${item} 쿼리 성공 (시도 ${attempt})`);
+              break;
+            }
+            
+            if (attempt < 3) {
+              const delay = 1000 * attempt; // 1초, 2초, 3초
+              console.log(`${item} 쿼리 실패, ${delay}ms 후 재시도...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          } catch (queryError) {
+            console.error(`${item} 쿼리 시도 ${attempt} 예외:`, queryError);
+            if (attempt === 3) {
+              error = { message: queryError instanceof Error ? queryError.message : 'Unknown error' };
+            }
+          }
+        }
 
         if (error) {
           console.error(`${item} 데이터 오류:`, error);
