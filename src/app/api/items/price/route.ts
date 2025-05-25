@@ -182,6 +182,73 @@ function cacheResponseData(itemName: string, data: any) {
   }
 }
 
+// 재시도 로직이 포함된 Supabase 쿼리 함수
+async function queryWithRetry(supabase: any, itemName: string, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`=== Supabase 쿼리 시도 ${attempt}/${maxRetries} ===`);
+      console.log('아이템명:', itemName);
+      
+      const startTime = Date.now();
+      
+      const { data, error } = await supabase
+        .from('auction_list')
+        .select('auction_price_per_unit')
+        .eq('item_name', itemName)
+        .not('auction_price_per_unit', 'is', null)
+        .order('auction_price_per_unit', { ascending: true });
+      
+      const queryTime = Date.now() - startTime;
+      console.log(`쿼리 완료 (${queryTime}ms)`);
+      
+      if (error) {
+        console.error(`시도 ${attempt} 실패 - Supabase 오류:`, error);
+        
+        // 네트워크 오류인 경우 재시도
+        if (error.message?.includes('fetch failed') || 
+            error.message?.includes('network') ||
+            error.message?.includes('timeout')) {
+          
+          if (attempt < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // 지수 백오프
+            console.log(`${delay}ms 후 재시도...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+        
+        throw error;
+      }
+      
+      console.log(`성공: ${data?.length || 0}개 데이터 조회`);
+      return data;
+      
+    } catch (err) {
+      console.error(`시도 ${attempt} 예외:`, err);
+      
+      // 네트워크 관련 오류인 경우 재시도
+      if (err instanceof Error && 
+          (err.message.includes('fetch failed') || 
+           err.message.includes('network') ||
+           err.message.includes('timeout') ||
+           err.message.includes('ECONNRESET') ||
+           err.message.includes('ETIMEDOUT'))) {
+        
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.log(`네트워크 오류 감지, ${delay}ms 후 재시도...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      throw err;
+    }
+  }
+  
+  throw new Error(`${maxRetries}번 시도 후 실패`);
+}
+
 export async function GET(request: Request) {
   const startTime = Date.now();
   
@@ -234,57 +301,10 @@ export async function GET(request: Request) {
       
       console.log('Supabase 쿼리 시작:', itemName);
       
-      // 더 짧은 타임아웃으로 빠른 실패 처리
-      const queryPromise = supabase
-        .from('auction_list')
-        .select('auction_price_per_unit, item_count, collected_at')
-        .eq('item_name', itemName)
-        .order('auction_price_per_unit', { ascending: true })
-        .limit(10);
-        
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('데이터베이스 쿼리 타임아웃')), 8000);
-      });
-      
-      // 8초 타임아웃으로 쿼리 실행
-      const result = await Promise.race([
-        queryPromise,
-        timeoutPromise
-      ]);
+             // 재시도 로직이 포함된 Supabase 쿼리 함수 호출
+       const data = await queryWithRetry(supabase, itemName);
 
-      const { data, error } = result as any;
-
-      console.log('쿼리 결과:', { 
-        dataExists: !!data, 
-        dataLength: data?.length || 0,
-        errorExists: !!error,
-        queryTime: Date.now() - startTime + 'ms'
-      });
-
-      if (error) {
-        console.error('Supabase 오류 상세:', {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint
-        });
-        
-        // 오류 발생 시 폴백 데이터 사용
-        const fallbackData = getFallbackData(itemName);
-        fallbackData.fallbackReason = `database_error: ${error.code || 'unknown'}`;
-        
-        return NextResponse.json(fallbackData, {
-          headers: {
-            ...corsHeaders,
-            'Cache-Control': 'public, max-age=900',
-            'X-Data-Source': 'fallback-db-error',
-            'X-Error-Code': error.code || 'unknown',
-            'X-Response-Time': `${Date.now() - startTime}ms`
-          }
-        });
-      }
-
-      if (!data || data.length === 0) {
+       if (!data || data.length === 0) {
         console.log('데이터 없음 - 폴백 데이터 사용');
         const fallbackData = getFallbackData(itemName);
         fallbackData.fallbackReason = 'no_data_found';
@@ -299,8 +319,12 @@ export async function GET(request: Request) {
         });
       }
 
-      // 데이터 처리
-      const auctionData: AuctionData[] = data;
+             // 데이터 처리
+       const auctionData: AuctionData[] = data.map((item: any) => ({
+         auction_price_per_unit: item.auction_price_per_unit,
+         item_count: item.item_count || 1,
+         collected_at: item.collected_at || new Date().toISOString()
+       }));
       const prices = auctionData.map(item => item.auction_price_per_unit);
       const counts = auctionData.map(item => item.item_count);
       

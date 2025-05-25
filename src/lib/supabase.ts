@@ -137,7 +137,23 @@
      global: {
        headers: { 
          'X-Client-Info': 'vercel-deployment',
-         'User-Agent': 'mabi-market/1.0'
+         'User-Agent': 'mabi-market/1.0',
+         'Accept': 'application/json',
+         'Content-Type': 'application/json'
+       },
+       fetch: (url, options = {}) => {
+         // Vercel 환경에서의 네트워크 최적화
+         const fetchOptions = {
+           ...options,
+           timeout: 8000, // 8초 타임아웃
+           headers: {
+             ...options.headers,
+             'Connection': 'keep-alive',
+             'Keep-Alive': 'timeout=5, max=1000'
+           }
+         };
+         
+         return fetch(url, fetchOptions);
        }
      },
      db: {
@@ -160,7 +176,25 @@
        global: {
          headers: { 
            'X-Client-Info': 'vercel-server',
-           'User-Agent': 'mabi-market-server/1.0'
+           'User-Agent': 'mabi-market-server/1.0',
+           'Accept': 'application/json',
+           'Content-Type': 'application/json'
+         },
+         fetch: (url, options = {}) => {
+           // 서버 환경에서의 네트워크 최적화
+           const fetchOptions = {
+             ...options,
+             timeout: 10000, // 10초 타임아웃
+             headers: {
+               ...options.headers,
+               'Connection': 'keep-alive',
+               'Keep-Alive': 'timeout=10, max=1000',
+               'Cache-Control': 'no-cache'
+             }
+           };
+           
+           console.log('Supabase 요청:', url);
+           return fetch(url, fetchOptions);
          }
        },
        db: {
