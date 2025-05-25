@@ -1,6 +1,6 @@
 // page.tsx - Server Component
 import { Suspense } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createServerSupabase } from '@/lib/supabase';
 import { formatKSTDateTime } from '@/utils/price';
 import ItemPriceList from './components/ItemPriceList';
 import MutantProfitCalculator from './components/MutantProfitCalculator';
@@ -91,20 +91,8 @@ async function fetchItemPrices() {
       } as unknown as ItemPrices;
     }
 
-    // 커스텀 fetch 함수 생성
-    const customFetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      return fetch(input, {
-        ...init,
-        next: { revalidate },
-        cache: 'no-store' 
-      });
-    };
-
-    // Supabase 클라이언트 초기화
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false },
-      global: { fetch: customFetch }
-    });
+    // Supabase 클라이언트 초기화 - 개선된 설정 사용
+    const supabase = createServerSupabase();
 
     console.log('Supabase 클라이언트 생성 성공');
 
@@ -139,14 +127,14 @@ async function fetchItemPrices() {
         console.log(`${item} 데이터 ${data.length}개 조회 성공`);
 
         // AuctionData를 PriceItem 형식으로 변환
-        const priceItems = data.map(item => ({
+        const priceItems = data.map((item: any) => ({
           price: item.auction_price_per_unit,
           count: item.item_count
         }));
 
         // 가중 평균 가격 계산
-        const totalItems = priceItems.reduce((sum, item) => sum + item.count, 0);
-        const totalValue = priceItems.reduce((sum, item) => sum + (item.price * item.count), 0);
+        const totalItems = priceItems.reduce((sum: number, item: any) => sum + item.count, 0);
+        const totalValue = priceItems.reduce((sum: number, item: any) => sum + (item.price * item.count), 0);
         const weightedAvg = totalValue / totalItems;
 
         // 정수로 반올림된 가격 값 사용
@@ -154,14 +142,14 @@ async function fetchItemPrices() {
         const roundedLowestPrice = Math.round(data[0].auction_price_per_unit);
 
         // 가장 최근 수집 시간 찾기
-        const latestCollectedAt = data.reduce((latest, current) => {
+        const latestCollectedAt = data.reduce((latest: string, current: any) => {
           const currentDate = new Date(current.collected_at);
           const latestDate = new Date(latest);
           return currentDate > latestDate ? current.collected_at : latest;
         }, data[0].collected_at);
 
         // 가격 목록도 정수로 반올림
-        const roundedPriceList = priceItems.map(item => ({
+        const roundedPriceList = priceItems.map((item: any) => ({
           price: Math.round(item.price),
           count: item.count
         }));
