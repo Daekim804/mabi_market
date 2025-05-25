@@ -26,7 +26,39 @@ export async function GET(request: Request) {
       startsWithHttps: supabaseUrl?.startsWith('https://') || false,
       containsSupabase: supabaseUrl?.includes('.supabase.co') || false,
       isPostgresUrl: supabaseUrl?.startsWith('postgresql://') || false,
-      preview: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : null
+      preview: supabaseUrl ? supabaseUrl.substring(0, 50) + '...' : null,
+      // PostgreSQL URL 상세 분석
+      postgresDetails: supabaseUrl?.startsWith('postgresql://') ? (() => {
+        try {
+          const urlObj = new URL(supabaseUrl);
+          return {
+            hostname: urlObj.hostname,
+            username: urlObj.username,
+            port: urlObj.port,
+            pathname: urlObj.pathname,
+            // 프로젝트 ID 추출 시도
+            extractedProjectId: (() => {
+              // 사용자명에서 추출
+              if (urlObj.username && urlObj.username.includes('.')) {
+                const parts = urlObj.username.split('.');
+                if (parts.length >= 2 && parts[0] === 'postgres') {
+                  return { source: 'username', value: parts[1] };
+                }
+              }
+              // 호스트에서 추출
+              if (urlObj.hostname.includes('.supabase.co')) {
+                const hostParts = urlObj.hostname.split('.');
+                if (hostParts.length >= 3 && hostParts[0] === 'postgres') {
+                  return { source: 'hostname', value: hostParts[1] };
+                }
+              }
+              return { source: 'none', value: null };
+            })()
+          };
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : 'URL 파싱 실패' };
+        }
+      })() : null
     };
 
     // Key 검증

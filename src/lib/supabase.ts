@@ -15,50 +15,66 @@
      // PostgreSQL URL 형식인지 확인 (postgresql://로 시작하는 경우)
      if (url.startsWith('postgresql://')) {
        console.warn('⚠️ PostgreSQL URL이 제공되었습니다. REST API URL로 자동 변환합니다.');
-       console.warn('제공된 URL:', url.substring(0, 30) + '...');
+       console.warn('제공된 URL:', url.substring(0, 50) + '...');
        
-       // PostgreSQL URL에서 호스트 추출 시도
+       // PostgreSQL URL에서 프로젝트 ID 추출 시도
        try {
          const urlObj = new URL(url);
          const host = urlObj.hostname;
+         const username = urlObj.username;
          
          console.log('추출된 호스트:', host);
+         console.log('추출된 사용자명:', username);
          
-         // Supabase 호스트인지 확인
-         if (host.includes('.supabase.co')) {
-           // 프로젝트 ID 추출 (예: postgres.hwskpyhrkbxuivdbqgrk -> hwskpyhrkbxuivdbqgrk)
-           const hostParts = host.split('.');
-           let projectId = '';
-           
-           // 다양한 호스트 형식 처리
-           if (hostParts.length >= 3 && hostParts[0] === 'postgres') {
-             projectId = hostParts[1]; // postgres.PROJECT_ID.supabase.co
-           } else if (hostParts.length >= 2) {
-             projectId = hostParts[0]; // PROJECT_ID.supabase.co
+         let projectId = '';
+         
+         // 방법 1: 사용자명에서 프로젝트 ID 추출 (postgres.PROJECT_ID 형식)
+         if (username && username.includes('.')) {
+           const usernameParts = username.split('.');
+           if (usernameParts.length >= 2 && usernameParts[0] === 'postgres') {
+             projectId = usernameParts[1];
+             console.log('사용자명에서 프로젝트 ID 추출:', projectId);
            }
+         }
+         
+         // 방법 2: 호스트에서 프로젝트 ID 추출 (postgres.PROJECT_ID.supabase.co 형식)
+         if (!projectId && host.includes('.supabase.co')) {
+           const hostParts = host.split('.');
+           if (hostParts.length >= 3 && hostParts[0] === 'postgres') {
+             projectId = hostParts[1];
+             console.log('호스트에서 프로젝트 ID 추출:', projectId);
+           } else if (hostParts.length >= 2) {
+             projectId = hostParts[0];
+             console.log('호스트 첫 부분에서 프로젝트 ID 추출:', projectId);
+           }
+         }
+         
+         // 방법 3: AWS Pooler 형식 처리 (.pooler.supabase.com)
+         if (!projectId && host.includes('.pooler.supabase.com')) {
+           console.log('Pooler URL 감지됨, 사용자명에서 프로젝트 ID 추출 시도...');
            
-           if (projectId && projectId !== 'postgres') {
-             const restApiUrl = `https://${projectId}.supabase.co`;
-             console.log('✅ REST API URL로 변환 성공:', restApiUrl);
+           if (username && username.startsWith('postgres.')) {
+             const poolerProjectId = username.split('.')[1];
+             if (poolerProjectId) {
+               projectId = poolerProjectId;
+               console.log('Pooler 사용자명에서 프로젝트 ID 추출:', projectId);
+             }
+           }
+         }
+         
+         // 프로젝트 ID 검증 및 REST API URL 생성
+         if (projectId && projectId !== 'postgres' && projectId.length > 5) {
+           const restApiUrl = `https://${projectId}.supabase.co`;
+           console.log('✅ REST API URL로 변환 성공:', restApiUrl);
+           
+           // 변환된 URL 검증
+           if (restApiUrl.includes('.supabase.co') && restApiUrl.startsWith('https://')) {
              return restApiUrl;
            }
          }
          
-         // AWS RDS 형식의 호스트인 경우 (예: aws-0-ap-northeast-2.pooler.supabase.com)
-         if (host.includes('.pooler.supabase.com')) {
-           console.log('Pooler URL 감지됨, 프로젝트 ID 추출 시도...');
-           
-           // URL에서 프로젝트 ID 추출 시도 (사용자명에서)
-           const username = urlObj.username;
-           if (username && username.startsWith('postgres.')) {
-             const projectId = username.split('.')[1];
-             if (projectId) {
-               const restApiUrl = `https://${projectId}.supabase.co`;
-               console.log('✅ Pooler URL에서 REST API URL로 변환 성공:', restApiUrl);
-               return restApiUrl;
-             }
-           }
-         }
+         console.error('❌ 유효한 프로젝트 ID를 찾을 수 없습니다.');
+         console.error('추출된 프로젝트 ID:', projectId);
          
        } catch (error) {
          console.error('URL 파싱 오류:', error);
@@ -66,6 +82,9 @@
        
        console.error('❌ PostgreSQL URL을 REST API URL로 변환할 수 없습니다.');
        console.error('수동으로 Vercel 환경 변수를 https://PROJECT_ID.supabase.co 형식으로 변경하세요.');
+       
+       // 실패 시에도 빈 문자열 대신 원본 URL 반환하여 추가 디버깅 가능
+       console.error('원본 URL 반환하여 추가 분석 가능하도록 함');
        return '';
      }
 
