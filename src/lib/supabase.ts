@@ -1,16 +1,71 @@
    // src/lib/supabase.ts
    import { createClient } from '@supabase/supabase-js';
 
-   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+   // 환경 변수 가져오기
+   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-   // 환경 변수 확인 및 로깅
-   if (!supabaseUrl || !supabaseKey) {
-     console.warn('Supabase 환경 변수가 설정되지 않았습니다');
-     console.warn('URL 존재:', !!supabaseUrl, 'Key 존재:', !!supabaseKey);
+   // URL 형식 검증 및 수정
+   function validateAndFixSupabaseUrl(url: string): string {
+     if (!url) {
+       console.error('NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다');
+       return '';
+     }
+
+     // PostgreSQL URL 형식인지 확인 (postgresql://로 시작하는 경우)
+     if (url.startsWith('postgresql://')) {
+       console.error('PostgreSQL URL이 제공되었습니다. REST API URL이 필요합니다.');
+       console.error('제공된 URL:', url.substring(0, 30) + '...');
+       
+       // PostgreSQL URL에서 호스트 추출 시도
+       try {
+         const urlObj = new URL(url);
+         const host = urlObj.hostname;
+         
+         // Supabase 호스트인지 확인
+         if (host.includes('.supabase.co')) {
+           // 프로젝트 ID 추출 (예: postgres.hwskpyhrkbxuivdbqgrk -> hwskpyhrkbxuivdbqgrk)
+           const projectId = host.split('.')[1];
+           const restApiUrl = `https://${projectId}.supabase.co`;
+           console.log('REST API URL로 변환:', restApiUrl);
+           return restApiUrl;
+         }
+       } catch (error) {
+         console.error('URL 파싱 오류:', error);
+       }
+       
+       return '';
+     }
+
+     // HTTPS URL 형식 확인
+     if (!url.startsWith('https://')) {
+       console.error('올바르지 않은 Supabase URL 형식:', url);
+       return '';
+     }
+
+     // Supabase 도메인 확인
+     if (!url.includes('.supabase.co')) {
+       console.error('올바르지 않은 Supabase 도메인:', url);
+       return '';
+     }
+
+     return url;
    }
 
-   // Vercel 배포 환경에 최적화된 클라이언트 설정
+   // URL 검증 및 수정
+   const supabaseUrl = validateAndFixSupabaseUrl(rawSupabaseUrl);
+
+   // 환경 변수 확인
+   if (!supabaseUrl || !supabaseKey) {
+     console.error('Supabase 환경 변수가 올바르게 설정되지 않았습니다');
+     console.error('URL 상태:', supabaseUrl ? '✓' : '✗');
+     console.error('Key 상태:', supabaseKey ? '✓' : '✗');
+   } else {
+     console.log('Supabase 클라이언트 생성 성공');
+     console.log('URL:', supabaseUrl);
+   }
+
+   // Supabase 클라이언트 생성
    export const supabase = createClient(supabaseUrl, supabaseKey, {
      auth: {
        persistSession: false,
@@ -18,25 +73,22 @@
        detectSessionInUrl: false
      },
      global: {
-       fetch: fetch,
-       headers: {
+       headers: { 
          'X-Client-Info': 'vercel-deployment',
-         'User-Agent': 'mabi-market-client'
+         'User-Agent': 'mabi-market/1.0'
        }
      },
      db: {
        schema: 'public'
-     },
-     // Vercel Edge Runtime 호환성을 위한 설정
-     realtime: {
-       params: {
-         eventsPerSecond: 1
-       }
      }
    });
 
-   // 서버용 클라이언트 (API 라우트 전용)
-   export const createServerSupabase = () => {
+   // 서버 컴포넌트용 Supabase 클라이언트 생성 함수
+   export function createServerSupabase() {
+     if (!supabaseUrl || !supabaseKey) {
+       throw new Error('Supabase 환경 변수가 설정되지 않았습니다');
+     }
+     
      return createClient(supabaseUrl, supabaseKey, {
        auth: {
          persistSession: false,
@@ -44,54 +96,35 @@
          detectSessionInUrl: false
        },
        global: {
-         fetch: fetch,
-         headers: {
-           'X-Client-Info': 'server-supabase-js',
-           'User-Agent': 'mabi-market-server',
-           // IPv6 호환성을 위한 헤더
-           'X-Forwarded-Proto': 'https'
+         headers: { 
+           'X-Client-Info': 'vercel-server',
+           'User-Agent': 'mabi-market-server/1.0'
          }
        },
        db: {
          schema: 'public'
        }
      });
-   };
+   }
 
-   // 연결 상태 확인 함수
-   export async function testSupabaseConnection(): Promise<{
-     success: boolean;
-     error?: string;
-     details?: any;
-   }> {
+   // 연결 테스트 함수
+   export async function testSupabaseConnection() {
      try {
        if (!supabaseUrl || !supabaseKey) {
          return {
            success: false,
            error: '환경 변수가 설정되지 않음',
            details: {
-             urlExists: !!supabaseUrl,
-             keyExists: !!supabaseKey
+             url: !!supabaseUrl,
+             key: !!supabaseKey
            }
          };
        }
 
-       const testClient = createServerSupabase();
-       
-       // 타임아웃을 포함한 연결 테스트
-       const timeoutPromise = new Promise((_, reject) => {
-         setTimeout(() => reject(new Error('연결 타임아웃')), 5000);
-       });
-
-       const testPromise = testClient
+       const { data, error } = await supabase
          .from('auction_list')
-         .select('id')
+         .select('count')
          .limit(1);
-
-       const { data, error } = await Promise.race([
-         testPromise,
-         timeoutPromise.then(() => ({ data: null, error: { message: '연결 타임아웃' } }))
-       ]) as any;
 
        if (error) {
          return {
@@ -103,10 +136,8 @@
 
        return {
          success: true,
-         details: {
-           dataExists: !!data,
-           timestamp: new Date().toISOString()
-         }
+         message: 'Supabase 연결 성공',
+         data
        };
      } catch (error) {
        return {
